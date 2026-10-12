@@ -6,7 +6,10 @@ const POPULATIONS = [
   { count: 118000, bounds: [-7, 7, -6, 7.9], quality: 0 },
   { count: 65000, bounds: [-16, 16, -25, 7.9], quality: 1 },
   { count: 40000, bounds: [-22, 22, -40, -25], quality: 2 },
-  { count: 28000, bounds: [-2.65, 2.65, -5.15, 10.55], quality: 0, seam: true },
+  { count: 50000, bounds: [-2.65, 2.65, -5.15, 10.55], quality: 0, seam: true },
+  // A shorter overlapping layer fills the gaps below the tall stone grass.
+  // It shares the same tiles and shader, with fewer blade segments.
+  { count: 65000, bounds: [-4.9, 4.9, -5.15, 10.55], quality: 1, understory: true },
 ];
 
 function stoneGrassProfile(x, z, hatch) {
@@ -15,11 +18,11 @@ function stoneGrassProfile(x, z, hatch) {
   const distance = Math.abs(x - crack.x) - crack.width * .5;
   // Follow the actual jagged fracture. Different patches on each bank remove
   // the straight bare strip without planting roots in the opening itself.
-  const clearance = .065
-    + noise2(z * .61 + 17.4, side * 3.7 + 8.2) * .27
-    + noise2(z * 2.8 + 4.6, side * 5.3 + 3.1) * .060;
+  const clearance = .025
+    + noise2(z * .61 + 17.4, side * 3.7 + 8.2) * .16
+    + noise2(z * 2.8 + 4.6, side * 5.3 + 3.1) * .090;
   const fineEdge = (noise2(x * 8.1 + 3.7, z * 7.4 + side * 9.2) - .5) * .16;
-  const fringe = THREE.MathUtils.smoothstep(distance + fineEdge, clearance - .08, clearance + .38);
+  const fringe = THREE.MathUtils.smoothstep(distance + fineEdge, clearance - .10, clearance + .22);
   const outerFade = 1 - THREE.MathUtils.smoothstep(distance, 1.0, 2.6);
   return { distance, clearance, fringe, outerFade,
     patch: noise2(x * .40 + 27.1, z * .40 + 3.7) };
@@ -83,6 +86,7 @@ function grassMaterial(uniforms, viewport) {
     shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>
       attribute float aGrassSeed;
       attribute float aGrassLod;
+      attribute float aGrassUnderstory;
       uniform float uGrassTime;
       uniform vec3 uGrassPointer;
       uniform float uGrassPointerActive;
@@ -125,7 +129,7 @@ function grassMaterial(uniforms, viewport) {
         away /= max(length(away), 0.001);
         vec3 cursorBend = away * hover * 0.13;
         vec3 droop = -directionY * (hover * 0.032 + abs(broadWave) * height * 0.013);
-        float curve = 0.08 + aGrassSeed * 0.12;
+        float curve = 0.08 + aGrassSeed * 0.12 + aGrassUnderstory * 0.48;
         vec3 bending = axisZ * curve + wind + cursorBend + droop;
         vec3 worldOffset = bending * t * t;
         vec3 localOffset = vec3(dot(worldOffset, directionX) / width,
@@ -134,7 +138,7 @@ function grassMaterial(uniforms, viewport) {
         // Mid/far blades widen just enough to keep opaque subpixel edges stable.
         // The reduced segment count preserves coverage without alpha overdraw.
         float depth = max(0.5, -(viewMatrix * vec4(root, 1.0)).z);
-        float minimumPixels = aGrassLod < 0.5 ? 0.0 : (aGrassLod < 1.5 ? 0.65 : 0.90);
+        float minimumPixels = aGrassLod < 0.5 ? 0.45 : (aGrassLod < 1.5 ? 0.65 : 0.90);
         float pixelWidth = width * uGrassViewport * projectionMatrix[1][1] / (2.0 * depth);
         float widen = clamp(minimumPixels / max(pixelWidth, 0.001), 1.0, 5.0);
         GrassPose pose;
@@ -171,7 +175,7 @@ function grassMaterial(uniforms, viewport) {
         * pow(vGrassHeight, 2.8) * vGrassHover;`);
     shader.fragmentShader = shader.fragmentShader.replace('#include <lights_fragment_begin>', translucentLighting);
   };
-  material.customProgramCacheKey = () => 'dense-grass-world-waves-transmission-v4';
+  material.customProgramCacheKey = () => 'dense-grass-layered-cover-v5';
   return material;
 }
 
@@ -196,7 +200,7 @@ export function createDenseGrass({ parent, groundHeight, uniforms, hatch, terrai
   }
   const random = rand(420938);
   const buckets = new Map();
-  const counts = { grassClumps: 0, grassBlades: 0, grassNear: 0, grassMid: 0, grassFar: 0, grassTiles: 0, grassSeam: 0 };
+  const counts = { grassClumps: 0, grassBlades: 0, grassNear: 0, grassMid: 0, grassFar: 0, grassTiles: 0, grassSeam: 0, grassUnderstory: 0 };
   const viewport = { value: typeof window === 'undefined' ? 1080 : window.innerHeight * Math.min(window.devicePixelRatio || 1, 1.6) };
   const material = grassMaterial(uniforms, viewport);
   const shapes = [bladeGeometry(0), bladeGeometry(1), bladeGeometry(2)];
@@ -206,18 +210,18 @@ export function createDenseGrass({ parent, groundHeight, uniforms, hatch, terrai
       // Grass has its own coherent patches, including sunlit bare stone between
       // fern clumps, instead of inheriting the fern canopy's shadowed root mask.
       if (profile.distance < .065) return -1;
-      if (!population.seam && profile.patch <= .55) return -1;
+      if (!population.seam && !population.understory && profile.patch <= .55) return -1;
       if (!hatch.surfaceHeight || y <= hatch.surfaceHeight(x, z) + 0.035) {
         return hatch.leafForPoint?.(x, z) === hatch.left || (!hatch.leafForPoint && x < 0) ? 1 : 2;
       }
     }
-    if (population.seam) return -1;
+    if (population.seam || population.understory) return -1;
     if (terrainHoleContains?.(x, z)) return -1;
     return 0;
   }
 
   for (const population of POPULATIONS) {
-    if(population.seam && !hasHatch)continue;
+    if((population.seam || population.understory) && !hasHatch)continue;
     let accepted = 0;
     for (let attempt = 0; accepted < population.count && attempt < population.count * 16; attempt++) {
       const x = THREE.MathUtils.lerp(population.bounds[0], population.bounds[1], random());
@@ -231,35 +235,44 @@ export function createDenseGrass({ parent, groundHeight, uniforms, hatch, terrai
       if (ownerIndex < 0) continue;
       const onStone = ownerIndex > 0;
       if (onStone) {
-        const seamDensity = population.seam
+        const seamDensity = population.understory
+          ? Math.max(profile.outerFade, THREE.MathUtils.smoothstep(profile.patch, .55, .66))
+          : population.seam
           ? profile.outerFade * (.65 + noise2(x * .85 + 6.2,z * .73 + 19.1) * .35)
           : 1;
         if (random() > profile.fringe * seamDensity) continue;
       }
       const seed = random();
-      const patchFringe = onStone && !population.seam ? THREE.MathUtils.smoothstep(profile.patch,.55,.66) : 1;
+      const patchFringe = onStone && !population.seam && !population.understory
+        ? THREE.MathUtils.smoothstep(profile.patch,.55,.66) : 1;
       const edgeHeight = onStone ? .20 + .80 * Math.sqrt(profile.fringe) : 1;
-      const height = onStone
+      const height = population.understory
+        ? (.14 + seed ** .75 * .12) * (.45 + .55 * Math.sqrt(profile.fringe))
+        : onStone
         ? Math.max(.055,(0.24 + seed ** 0.75 * 0.18) * (.18 + .82 * Math.sqrt(patchFringe)) * edgeHeight)
         : .26 + seed ** .85 * .24;
-      const width = 0.0030 + random() * 0.0030;
+      const width = (population.understory ? .0040 : .0030) + random() * .0030;
       const key = `${ownerIndex}:${population.quality}:${Math.floor(x / TILE_SIZE)}:${Math.floor(z / TILE_SIZE)}`;
       if (!buckets.has(key)) buckets.set(key, { ownerIndex, maximumQuality: population.quality, records: [] });
-      buckets.get(key).records.push({ x, y: y + 0.003, z, height, width, seed, yaw: random() * Math.PI * 2 });
+      buckets.get(key).records.push({ x, y: y + 0.003, z, height, width, seed,
+        understory: population.understory ? 1 : 0, yaw: random() * Math.PI * 2 });
       accepted++;
     }
     counts.grassBlades += accepted;
     counts[['grassNear', 'grassMid', 'grassFar'][population.quality]] += accepted;
     if(population.seam)counts.grassSeam += accepted;
+    if(population.understory)counts.grassUnderstory += accepted;
   }
 
   const dummy = new THREE.Object3D(), matrix = new THREE.Matrix4();
   const tiles = [];
   for (const bucket of buckets.values()) {
     const seed = new THREE.InstancedBufferAttribute(new Float32Array(bucket.records.map(record => record.seed)), 1);
+    const understory = new THREE.InstancedBufferAttribute(new Float32Array(bucket.records.map(record => record.understory)), 1);
     const geometries = shapes.map(shape => {
       const geometry = shape.clone();
       geometry.setAttribute('aGrassSeed', seed);
+      geometry.setAttribute('aGrassUnderstory', understory);
       return geometry;
     });
     const mesh = new THREE.InstancedMesh(geometries[bucket.maximumQuality], material, bucket.records.length);

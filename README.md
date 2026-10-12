@@ -37,4 +37,6 @@ Surface grass uses dense, fine blades with darker roots and sunlit tips. The mea
 
 Extra fine grass grows along both fracture banks. Its irregular clearance follows the actual crack, with noise-shaped tufts and a gradual density/height falloff instead of a straight bare strip. Roots remain attached to the moving stone halves; the fracture itself stays open.
 
+The foreground stone grass includes a dense shorter layer of leaning blades underneath the taller strands. This overlaps the gaps between roots and gives the grass patches a continuous dark base. The lower layer uses three triangles per blade and shares existing instanced tiles, wind, pointer response, shadows and distance culling.
+
 Run `node scripts/check-journey.mjs` to check clearance before the camera crosses the ground, continuous forward orientation, reverse scrolling, frame-rate independent damping and reduced-motion behavior. Native scroll remains available with wheel, trackpad and keyboard. Reduced motion removes decorative wind/parallax and scroll damping while retaining the user-controlled journey.
