@@ -3,10 +3,27 @@ import { rand, noise2 } from './math.js';
 
 const TILE_SIZE = 10;
 const POPULATIONS = [
-  { count: 110000, bounds: [-7, 7, -6, 7.9], quality: 0 },
+  { count: 118000, bounds: [-7, 7, -6, 7.9], quality: 0 },
   { count: 65000, bounds: [-16, 16, -25, 7.9], quality: 1 },
   { count: 40000, bounds: [-22, 22, -40, -25], quality: 2 },
+  { count: 28000, bounds: [-2.65, 2.65, -5.15, 10.55], quality: 0, seam: true },
 ];
+
+function stoneGrassProfile(x, z, hatch) {
+  const crack = hatch.crackAt?.(z) ?? { x: 0, width: .12 };
+  const side = x < crack.x ? -1 : 1;
+  const distance = Math.abs(x - crack.x) - crack.width * .5;
+  // Follow the actual jagged fracture. Different patches on each bank remove
+  // the straight bare strip without planting roots in the opening itself.
+  const clearance = .065
+    + noise2(z * .61 + 17.4, side * 3.7 + 8.2) * .27
+    + noise2(z * 2.8 + 4.6, side * 5.3 + 3.1) * .060;
+  const fineEdge = (noise2(x * 8.1 + 3.7, z * 7.4 + side * 9.2) - .5) * .16;
+  const fringe = THREE.MathUtils.smoothstep(distance + fineEdge, clearance - .08, clearance + .38);
+  const outerFade = 1 - THREE.MathUtils.smoothstep(distance, 1.0, 2.6);
+  return { distance, clearance, fringe, outerFade,
+    patch: noise2(x * .40 + 27.1, z * .40 + 3.7) };
+}
 
 function bladeGeometry(quality) {
   const segments = 3 - quality;
@@ -179,25 +196,28 @@ export function createDenseGrass({ parent, groundHeight, uniforms, hatch, terrai
   }
   const random = rand(420938);
   const buckets = new Map();
-  const counts = { grassClumps: 0, grassBlades: 0, grassNear: 0, grassMid: 0, grassFar: 0, grassTiles: 0 };
+  const counts = { grassClumps: 0, grassBlades: 0, grassNear: 0, grassMid: 0, grassFar: 0, grassTiles: 0, grassSeam: 0 };
   const viewport = { value: typeof window === 'undefined' ? 1080 : window.innerHeight * Math.min(window.devicePixelRatio || 1, 1.6) };
   const material = grassMaterial(uniforms, viewport);
   const shapes = [bladeGeometry(0), bladeGeometry(1), bladeGeometry(2)];
 
-  function rootOwner(x, z, y) {
+  function rootOwner(x, z, y, population, profile) {
     if (hasHatch && hatch.contains(x, z)) {
       // Grass has its own coherent patches, including sunlit bare stone between
       // fern clumps, instead of inheriting the fern canopy's shadowed root mask.
-      if (Math.abs(x) < 0.60 || noise2(x * 0.40 + 27.1, z * 0.40 + 3.7) <= 0.55) return -1;
+      if (profile.distance < .065) return -1;
+      if (!population.seam && profile.patch <= .55) return -1;
       if (!hatch.surfaceHeight || y <= hatch.surfaceHeight(x, z) + 0.035) {
         return hatch.leafForPoint?.(x, z) === hatch.left || (!hatch.leafForPoint && x < 0) ? 1 : 2;
       }
     }
+    if (population.seam) return -1;
     if (terrainHoleContains?.(x, z)) return -1;
     return 0;
   }
 
   for (const population of POPULATIONS) {
+    if(population.seam && !hasHatch)continue;
     let accepted = 0;
     for (let attempt = 0; accepted < population.count && attempt < population.count * 16; attempt++) {
       const x = THREE.MathUtils.lerp(population.bounds[0], population.bounds[1], random());
@@ -205,12 +225,23 @@ export function createDenseGrass({ parent, groundHeight, uniforms, hatch, terrai
       const density = 0.59 + (noise2(x * 0.30, z * 0.30) - 0.5) * 0.54;
       if (random() > density) continue;
       const y = groundHeight(x, z);
-      const ownerIndex = rootOwner(x, z, y);
+      const onPlate = hasHatch && hatch.contains(x,z);
+      const profile = onPlate ? stoneGrassProfile(x,z,hatch) : null;
+      const ownerIndex = rootOwner(x, z, y, population, profile);
       if (ownerIndex < 0) continue;
       const onStone = ownerIndex > 0;
+      if (onStone) {
+        const seamDensity = population.seam
+          ? profile.outerFade * (.65 + noise2(x * .85 + 6.2,z * .73 + 19.1) * .35)
+          : 1;
+        if (random() > profile.fringe * seamDensity) continue;
+      }
       const seed = random();
-      const patchFringe=onStone?THREE.MathUtils.smoothstep(noise2(x*.40+27.1,z*.40+3.7),.55,.66):1;
-      const height = onStone ? (0.19 + seed ** 0.75 * 0.15) * (0.14 + 0.86 * Math.sqrt(patchFringe)) : 0.26 + seed ** 0.85 * 0.24;
+      const patchFringe = onStone && !population.seam ? THREE.MathUtils.smoothstep(profile.patch,.55,.66) : 1;
+      const edgeHeight = onStone ? .20 + .80 * Math.sqrt(profile.fringe) : 1;
+      const height = onStone
+        ? Math.max(.055,(0.24 + seed ** 0.75 * 0.18) * (.18 + .82 * Math.sqrt(patchFringe)) * edgeHeight)
+        : .26 + seed ** .85 * .24;
       const width = 0.0030 + random() * 0.0030;
       const key = `${ownerIndex}:${population.quality}:${Math.floor(x / TILE_SIZE)}:${Math.floor(z / TILE_SIZE)}`;
       if (!buckets.has(key)) buckets.set(key, { ownerIndex, maximumQuality: population.quality, records: [] });
@@ -218,7 +249,8 @@ export function createDenseGrass({ parent, groundHeight, uniforms, hatch, terrai
       accepted++;
     }
     counts.grassBlades += accepted;
-    counts[['grassNear', 'grassMid', 'grassFar'][population.quality]] = accepted;
+    counts[['grassNear', 'grassMid', 'grassFar'][population.quality]] += accepted;
+    if(population.seam)counts.grassSeam += accepted;
   }
 
   const dummy = new THREE.Object3D(), matrix = new THREE.Matrix4();

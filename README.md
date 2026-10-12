@@ -35,4 +35,6 @@ Hover response raises rooted plants by up to 33%, bends them away from the point
 
 Surface grass uses dense, fine blades with darker roots and sunlit tips. The meadow receives a continuous irregular cover; the hatch keeps clear stone between grassy patches and an unobstructed fracture. Spatial batches and distance detail levels reduce invisible and distant geometry. Blade motion runs on the GPU with shared gusts and rooted cursor displacement. Opaque ribbons avoid alpha-card overdraw, and grass receives the existing sun/foliage shadows. Final edge antialiasing softens subpixel strands without a multisample HDR framebuffer. No additional runtime images or models are needed for this grass.
 
+Extra fine grass grows along both fracture banks. Its irregular clearance follows the actual crack, with noise-shaped tufts and a gradual density/height falloff instead of a straight bare strip. Roots remain attached to the moving stone halves; the fracture itself stays open.
+
 Run `node scripts/check-journey.mjs` to check clearance before the camera crosses the ground, continuous forward orientation, reverse scrolling, frame-rate independent damping and reduced-motion behavior. Native scroll remains available with wheel, trackpad and keyboard. Reduced motion removes decorative wind/parallax and scroll damping while retaining the user-controlled journey.
