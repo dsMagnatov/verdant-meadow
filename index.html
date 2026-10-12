@@ -14,7 +14,7 @@
     <canvas id="scene" lang="uk" aria-label="Тривимірна мохова долина. Прокручуйте, щоб розкрити кам’яний люк і спуститися в підземний тунель."></canvas>
     <header class="site-header">
       <span class="company-name">Verdant</span>
-      <button class="menu-button" type="button"><span>Menu</span><span class="menu-icon" aria-hidden="true"></span></button>
+      <button class="menu-button" id="menu-toggle" type="button" aria-haspopup="dialog" aria-controls="site-menu" aria-expanded="false"><span>Menu</span><span class="menu-icon" aria-hidden="true"></span></button>
     </header>
     <main class="hero-copy" id="hero-copy">
       <h1 class="hero-title" aria-label="On-prem that feels like the public cloud">
@@ -23,6 +23,22 @@
       </h1>
       <p class="hero-description">Beyond the impact investigates the human cost of crowd-control weapons. Through<br />survivor stories, expert analysis, and visual investigations, we challenge official<br />narratives and reveal the lasting harm behind “less lethal” force.</p>
     </main>
+    <dialog class="site-menu" id="site-menu" aria-label="Main menu">
+      <div class="site-header">
+        <span class="company-name">Verdant</span>
+        <button class="menu-button menu-close" type="button" autofocus><span>Close</span><span class="menu-icon" aria-hidden="true"></span></button>
+      </div>
+      <nav class="menu-navigation" aria-label="Main navigation">
+        <a class="menu-link" href="#home" data-progress="0"><span class="menu-link-title">Home</span></a>
+        <a class="menu-link" href="#explore" data-progress="1"><span class="menu-link-title">Explore</span></a>
+        <a class="menu-link" href="#the-rift" data-progress="0.28"><span class="menu-link-title">The Rift</span></a>
+        <a class="menu-link" href="#roots" data-progress="0.70"><span class="menu-link-title">Roots</span></a>
+      </nav>
+    </dialog>
+    <div class="scene-anchor" id="home" aria-hidden="true"></div>
+    <div class="scene-anchor" id="explore" aria-hidden="true"></div>
+    <div class="scene-anchor" id="the-rift" aria-hidden="true"></div>
+    <div class="scene-anchor" id="roots" aria-hidden="true"></div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

@@ -19,9 +19,11 @@ import { createUnderground, openingContains } from './underground.js';
 import { createUndergroundVegetation } from './underground-vegetation.js';
 import { createScrollJourney } from './scroll-journey.js';
 import { groundHeight } from './math.js';
+import { createMenu } from './menu.js';
 import './style.css';
 
 const canvas = document.querySelector('#scene');
+const navigation = createMenu({ scrollViewports: 5 });
 const heroCopy = document.querySelector('#hero-copy');
 const logoLightTarget = new THREE.Vector3();
 let lastHeroOpacity=-1;
@@ -224,7 +226,7 @@ async function populate() {
   // Read-only scene diagnostics are exposed for browser QA.
   window.sceneDiagnostics={ready:true,plants:vegetation.counts,hatchHalves:2,referenceAssets:true,interaction:'rooted rise, bend and warm glow',reducedMotion};
   canvas.dataset.ready='true';canvas.dataset.plants=JSON.stringify(vegetation.counts);
-  canvas.dataset.revision='typography-soft-rays-13';canvas.dataset.particles=String(pollen.points.geometry.attributes.position.count);
+  canvas.dataset.revision='fullscreen-menu-14';canvas.dataset.particles=String(pollen.points.geometry.attributes.position.count);
   canvas.dataset.logo=JSON.stringify(glassLogo.details);
   canvas.dataset.lighting='4096 sun shadows, contact occlusion, shadowed volumetric sunlight';
   canvas.dataset.composition='wide moss hatch, continuous crack';canvas.dataset.blur='broad lower corners and soft bottom center';
@@ -238,7 +240,7 @@ async function populate() {
 window.addEventListener('pointermove',event=>{
   pointer.set(event.clientX/window.innerWidth*2-1,1-event.clientY/window.innerHeight*2);
   uniforms.pointerScreen.value.set(event.clientX/window.innerWidth,1-event.clientY/window.innerHeight);
-  pointerInside=true;
+  pointerInside=!navigation.isOpen;
 },{passive:true});
 document.addEventListener('pointerleave',()=>{pointerInside=false;});
 window.addEventListener('blur',()=>{pointerInside=false;});
@@ -252,10 +254,11 @@ window.addEventListener('resize',()=>{
 
 function updatePointer(dt) {
   smoothPointer.lerp(pointer,1-Math.exp(-4*dt));
-  pointerPresence=THREE.MathUtils.damp(pointerPresence,pointerInside?1:0,6,dt);
+  const interacting=pointerInside&&!navigation.isOpen;
+  pointerPresence=THREE.MathUtils.damp(pointerPresence,interacting?1:0,6,dt);
   uniforms.pointerPresence.value=pointerPresence;
   let hit=false;
-  if(pointerInside) {
+  if(interacting) {
     raycaster.setFromCamera(smoothPointer,camera);
     const r=raycaster.ray;
     uniforms.pointerRayOrigin.value.copy(r.origin);

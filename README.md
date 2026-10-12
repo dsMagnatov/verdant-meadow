@@ -1,6 +1,6 @@
 # Moss Valley
 
-A desktop WebGL scene: a luminous green and gold meadow, grouped moss-covered boulders, drifting pollen, wildflowers and a broad two-part stone hatch whose crack continues below the viewport. Scrolling opens the stone leaves and takes the camera underground into a mossy, vaulted rock corridor. A fixed canvas sits behind the Verdant wordmark, a rectangular Menu button with a two-line icon and the owner-supplied two-line hero typography. Menu is a visual placeholder; no menu panel is implemented.
+A desktop WebGL scene: a luminous green and gold meadow, grouped moss-covered boulders, drifting pollen, wildflowers and a broad two-part stone hatch whose crack continues below the viewport. Scrolling opens the stone leaves and takes the camera underground into a mossy, vaulted rock corridor. A fixed canvas sits behind the Verdant wordmark, a rectangular Menu button with a two-line icon and the owner-supplied two-line hero typography. Menu smoothly blurs the live scene behind four large Instrument Serif links with staggered motion. Home returns to the meadow; Explore follows the existing scroll journey to the tunnel. The Rift stops at the open hatch; Roots stops by the underground vegetation. Links have no decorative arrows, numbering or separators.
 
 ## Run
 
@@ -14,6 +14,7 @@ Build with `pnpm build`, then serve the `dist` directory (`pnpm preview`). Requi
 ## Scene structure
 
 - `src/main.js`: renderer, lighting, texture/model loaders, pointer smoothing, camera rig and render loop.
+- `src/menu.js`: modal opening/dismissal, native focus trapping, scroll locking and navigation through the scene.
 - `src/environment.js`: emerald sky, terrain, distant hills, moss-covered scanned boulders and drifting luminous pollen.
 - `src/vegetation.js`: instanced foliage and vertex/fragment shader interaction.
 - `src/dense-grass.js`: fine opaque grass blades, spatial tiles, distance detail levels, coherent wind and rooted cursor parting.

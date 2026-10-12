@@ -15,7 +15,7 @@ canvas { position: fixed; inset: 0; display: block; width: 100vw; height: 100vh;
 .menu-button:hover { background: #f4f6eb; transform: translateY(-2px); }
 .menu-button:active { transform: translateY(0); }
 .menu-button:focus-visible { outline: 2px solid #fff; outline-offset: 5px; box-shadow: 0 0 0 5px #25302780; }
-.hero-copy { position: fixed; z-index: 1; left: 0; right: 0; bottom: 6.7vh; display: flex; flex-direction: column; align-items: center; gap: clamp(24px, 2.6vw, 50px); color: #fff; pointer-events: none; text-align: center; font-family: 'Instrument Serif', serif; will-change: opacity, transform; }
+.hero-copy { position: fixed; z-index: 1; left: 0; right: 0; bottom: 6.7vh; display: flex; flex-direction: column; align-items: center; gap: clamp(24px, 2.6vw, 50px); color: #fff; pointer-events: none; text-align: center; font-family: 'Instrument Serif', serif; will-change: opacity, transform; transition: filter .4s; }
 .hero-title { margin: 0; font-weight: 400; font-size: min(6.3vw, 10.5vh); line-height: .91; letter-spacing: -.01em; text-shadow: 0 2px 20px #15271720; }
 .title-line { display: block; white-space: nowrap; }
 .hero-title em { font-weight: 400; font-style: italic; }
@@ -23,4 +23,24 @@ canvas { position: fixed; inset: 0; display: block; width: 100vw; height: 100vh;
 .script-initial { display: inline-block; font-family: 'Kapakana', cursive; font-size: 1.25em; font-style: normal; line-height: 0; letter-spacing: 0; vertical-align: -.025em; margin-left: -.025em; margin-right: -.035em; }
 .script-initial-c { margin-left: .025em; margin-right: -.02em; }
 .hero-description { margin: 0; max-width: 80vw; font-size: clamp(13px, 1.05vw, 21px); line-height: 1.02; font-weight: 400; text-transform: uppercase; text-shadow: 0 1px 8px #16231180; }
-@media (prefers-reduced-motion: reduce) { .menu-button { transition: none; } .hero-copy { will-change: opacity; } }
+body.menu-open .hero-copy { filter: opacity(0); }
+.site-menu { position: fixed; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: transparent; color: #fff; overflow: hidden; opacity: 0; transition: opacity .48s cubic-bezier(.2,.7,.2,1); }
+.site-menu::backdrop { background: transparent; backdrop-filter: blur(0); opacity: 0; transition: opacity .48s cubic-bezier(.2,.7,.2,1), backdrop-filter .48s cubic-bezier(.2,.7,.2,1); }
+.site-menu.is-visible, .site-menu.is-visible::backdrop { opacity: 1; }
+.site-menu.is-visible::backdrop { backdrop-filter: blur(18px); }
+.menu-close .menu-icon { position: relative; }
+.menu-close .menu-icon::before, .menu-close .menu-icon::after { position: absolute; top: 3px; transition: transform .4s cubic-bezier(.2,.7,.2,1); }
+.is-visible .menu-close .menu-icon::before { transform: rotate(45deg); }
+.is-visible .menu-close .menu-icon::after { transform: rotate(-45deg); }
+.menu-navigation { position: absolute; left: 8vw; top: 50%; width: min(56vw, 1060px); transform: translateY(-50%); display: flex; flex-direction: column; }
+.menu-link { position: relative; display: flex; padding: 12px 0 16px; color: #f8f9ec; text-decoration: none; font-family: 'Instrument Serif', serif; opacity: 0; transform: translateY(40px); transition: opacity .3s, transform .4s cubic-bezier(.2,.7,.2,1), color .25s; }
+.is-visible .menu-link { opacity: 1; transform: translateY(0); transition-duration: .6s, .65s, .25s; transition-delay: .1s, .1s, 0s; }
+.is-visible .menu-link:nth-child(2) { transition-delay: .18s, .18s, 0s; }
+.is-visible .menu-link:nth-child(3) { transition-delay: .26s, .26s, 0s; }
+.is-visible .menu-link:nth-child(4) { transition-delay: .34s, .34s, 0s; }
+.menu-link-title { font-size: min(7.2vw, 12.2vh); font-weight: 400; line-height: 1; letter-spacing: -.035em; transition: transform .35s cubic-bezier(.2,.7,.2,1); }
+.menu-link:hover, .menu-link:focus-visible { color: #e1efac; }
+.menu-link:hover .menu-link-title, .menu-link:focus-visible .menu-link-title { transform: translateX(14px); }
+.menu-link:focus-visible { outline: 1px solid #e1efac80; outline-offset: 8px; border-radius: 4px; }
+.scene-anchor { position: absolute; left: 0; width: 1px; height: 0; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .menu-button, .hero-copy, .site-menu, .site-menu::backdrop, .menu-link, .is-visible .menu-link, .menu-link-title, .menu-close .menu-icon::before, .menu-close .menu-icon::after { transition: none; } .hero-copy { will-change: opacity; } }
