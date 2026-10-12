@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { rand, noise2 } from './math.js';
+import { createDenseGrass } from './dense-grass.js';
 
 const HATCH_X = 2.58;
 const HATCH_Z = 1.82;
@@ -548,30 +549,13 @@ export function createVegetation({
     }
   }
 
-  const grassSurface = addPlantMotion(new THREE.MeshStandardMaterial({
-    color: 0xe4ebcc,
-    vertexColors: true,
-    side: THREE.DoubleSide,
-    roughness: 1,
-    metalness: 0,
-  }), uniforms, { emission: 0.45, breeze: 1.3 });
-  const grass = new THREE.InstancedMesh(makeGrassTuft(), grassSurface, 6500);
-  grass.name = 'meadow-micro-grass';
-  grass.receiveShadow = true;
-  grass.frustumCulled = false;
-  grass.count = scatter(6500, [-16, 16, -25, 7.9], (index, x, z) => {
-    const height = 0.12 + random() ** 1.5 * 0.33;
-    setPlant(grass, index, {
-      x, z, height,
-      width: 0.90 + random() * 0.80,
-      color: random() < 0.20 ? 0xb9c394 : 0xe0e7c4,
-    });
+  // Preserve the legacy RNG sequence so replacing grass cannot move the moss,
+  // tall hatch plants or boulder flora generated later in this function.
+  scatter(6500, [-16, 16, -25, 7.9], () => {
+    for (let draw = 0; draw < 7; draw++) random();
   }, { padding: 0.43 });
-  grass.instanceMatrix.needsUpdate = true;
-  grass.instanceColor.needsUpdate = true;
-  counts.grassClumps = grass.count;
-  group.add(grass);
-  attachToSurfaces(grass);
+  const grassField = createDenseGrass({ parent: group, groundHeight, uniforms, hatch, terrainHoleContains });
+  Object.assign(counts, grassField.counts);
 
   const mossSurface = addPlantMotion(new THREE.MeshStandardMaterial({
     color: 0xf0f2d8,
@@ -769,5 +753,5 @@ export function createVegetation({
     });
   }
   group.userData.counts = counts;
-  return { group, counts };
+  return { group, counts, grassField };
 }

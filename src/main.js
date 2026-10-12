@@ -7,6 +7,8 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { createAtmospherePass } from './postprocessing.js';
 import { createEnvironment, scatterRocks, createDust } from './environment.js';
 import { createVegetation } from './vegetation.js';
@@ -53,6 +55,11 @@ composer.addPass(atmosphere);
 const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth,window.innerHeight),.35,.50,1.15);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
+// Edge-only antialiasing keeps fine grass strands stable without a multisample
+// HDR framebuffer. Run after tone mapping so contrast detection uses sRGB.
+const antialiasing=new ShaderPass(FXAAShader);
+antialiasing.uniforms.resolution.value.set(1/composer.renderTarget1.width,1/composer.renderTarget1.height);
+composer.addPass(antialiasing);
 const environment=createEnvironment(scene);
 // The sky glow, surface shadows and volumetric light share one sun direction.
 sun.position.copy(environment.sunlightDirection).multiplyScalar(36).add(sun.target.position);
@@ -66,7 +73,7 @@ cavePollen.group.visible=false;
 const surfaceFogColor=new THREE.Color(0xc5ce89), caveFogColor=new THREE.Color(0x102326);
 const journey=createScrollJourney({heightMultiplier:5,reducedMotion:window.matchMedia('(prefers-reduced-motion: reduce)').matches});
 const pointerSurfaces=[environment.ground];
-let hatchRig=null, underground=null, caveVegetation=null;
+let hatchRig=null, underground=null, caveVegetation=null, grassField=null;
 
 // Remove the ground itself beneath the opening, so the camera crosses a real
 // aperture rather than disappearing through a solid heightfield.
@@ -192,6 +199,7 @@ async function populate() {
   const fernGeometry=normalizedGeometry(fernMesh);
   const fernMaterial=new THREE.MeshStandardMaterial({map:fernMap,alphaMap:fernMap,alphaTest:.045,normalMap:fernNormal,aoMap:fernAO,aoMapIntensity:.15,color:0xe2f0bc,roughness:.88,side:THREE.DoubleSide,normalScale:new THREE.Vector2(.25,.25)});
   const vegetation=createVegetation({scene,fernGeometry,fernMaterial,atlas,groundHeight:sceneSurfaceHeight,uniforms,hatch,rockSamples:landscapeRocks.surfaceSamples,terrainHoleContains:openingContains});
+  grassField=vegetation.grassField;
   const caveStone=new THREE.MeshStandardMaterial({map:stoneMap,normalMap:stoneNormal,roughnessMap:stoneRough,roughness:.98,normalScale:new THREE.Vector2(1.2,1.2),color:0xb2bcad});
   underground=createUnderground({scene,stoneMaterial:caveStone,mossMap:environment.terrainMaterial.map});
   caveVegetation=createUndergroundVegetation({scene,fernGeometry,fernMaterial,atlas,uniforms,rootSamples:underground.rootSamples});
@@ -201,7 +209,7 @@ async function populate() {
   // Read-only diagnostics are exposed for browser QA; there is no on-screen UI.
   window.sceneDiagnostics={ready:true,plants:vegetation.counts,hatchHalves:2,referenceAssets:true,interaction:'rooted rise, bend and warm glow',reducedMotion};
   canvas.dataset.ready='true';canvas.dataset.plants=JSON.stringify(vegetation.counts);
-  canvas.dataset.revision='scroll-descent-5';canvas.dataset.particles=String(pollen.points.geometry.attributes.position.count);
+  canvas.dataset.revision='dense-grass-6';canvas.dataset.particles=String(pollen.points.geometry.attributes.position.count);
   canvas.dataset.lighting='4096 sun shadows, contact occlusion, shadowed volumetric sunlight';
   canvas.dataset.composition='wide moss hatch, continuous crack';canvas.dataset.blur='corners only';
   canvas.dataset.rocks=String(landscapeRocks.placements?.length||0);
@@ -221,6 +229,7 @@ window.addEventListener('resize',()=>{
   camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth,window.innerHeight);composer.setSize(window.innerWidth,window.innerHeight);
   atmosphere.uniforms.aspect.value=camera.aspect;
+  antialiasing.uniforms.resolution.value.set(1/composer.renderTarget1.width,1/composer.renderTarget1.height);
 });
 
 function updatePointer(dt) {
@@ -277,6 +286,7 @@ function render(now) {
   camera.position.y+=smoothPointer.y*.09*influence;
   camera.lookAt(pose.target.x+smoothPointer.x*.08*influence,pose.target.y+smoothPointer.y*.035*influence,pose.target.z);
   camera.updateMatrixWorld();
+  grassField?.update(camera);
   updatePointer(dt);
   if(!reducedMotion) {
     uniforms.time.value+=dt;
@@ -301,6 +311,7 @@ function render(now) {
     canvas.dataset.phase=pose.phase;
     canvas.dataset.camera=JSON.stringify(camera.position.toArray().map(v=>Number(v.toFixed(3))));
     canvas.dataset.leaves=JSON.stringify([hatchRig.left.position.x,hatchRig.right.position.x].map(v=>Number(v.toFixed(3))));
+    if(grassField?.stats)canvas.dataset.grass=JSON.stringify(grassField.stats);
     averageFrameMs=THREE.MathUtils.lerp(averageFrameMs,elapsed,.035);
     canvas.dataset.fps=String(Math.round(1000/Math.max(1,averageFrameMs)));
   }
