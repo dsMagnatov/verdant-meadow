@@ -1,26 +1,62 @@
 import * as THREE from 'three';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { contactOcclusionGLSL, createContactOcclusionUniforms } from './contact-occlusion.js';
 
-export function createAtmospherePass(composer, camera) {
+export function createAtmospherePass(composer, camera, sun) {
   for (const target of [composer.renderTarget1, composer.renderTarget2]) {
     target.depthTexture = new THREE.DepthTexture(target.width, target.height, THREE.UnsignedIntType);
   }
-  return new ShaderPass({
+  const clearShadow = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+  clearShadow.needsUpdate = true;
+  const pass = new ShaderPass({
+    name: 'MeadowLightAndDepth',
     uniforms: {
       tDiffuse: { value: null }, tDepth: { value: null },
-      aspect: { value: camera.aspect }, time: { value: 0 },
-      sunPosition: { value: new THREE.Vector2(-.08, 1.18) },
-      maxBlur: { value: .008 }, shaftStrength: { value: .12 },
+      aspect: { value: camera.aspect }, maxBlur: { value: .008 },
+      sunShadowMap: { value: clearShadow }, sunShadowMatrix: { value: sun.shadow.matrix },
+      cameraWorld: { value: camera.matrixWorld },
+      lightToSun: { value: new THREE.Vector3() },
+      airDensity: { value: .007 }, scatterStrength: { value: .48 },
+      ...createContactOcclusionUniforms(camera),
     },
     vertexShader:`varying vec2 vUv;
-      void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
+      void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}`,
     fragmentShader:`
-      uniform sampler2D tDiffuse,tDepth;
-      uniform float aspect,time,maxBlur,shaftStrength;
-      uniform vec2 sunPosition;
+      #include <packing>
+      uniform sampler2D tDiffuse,tDepth,sunShadowMap;
+      uniform float aspect,maxBlur,airDensity,scatterStrength;
+      uniform mat4 sunShadowMatrix,cameraWorld;
+      uniform vec3 lightToSun;
       varying vec2 vUv;
-      float hash(float x){return fract(sin(x*127.1)*43758.5453);}
-      float noise(float x){float i=floor(x),f=fract(x);return mix(hash(i),hash(i+1.),f*f*(3.-2.*f));}
+      ${contactOcclusionGLSL}
+
+      float sunlightAt(vec3 worldPosition) {
+        vec4 projected=sunShadowMatrix*vec4(worldPosition,1.);
+        vec3 shadow=projected.xyz/projected.w;
+        if(any(lessThan(shadow,vec3(0.))) || any(greaterThan(shadow,vec3(1.)))) return 1.;
+        float storedDepth=unpackRGBAToDepth(texture2D(sunShadowMap,shadow.xy));
+        return smoothstep(shadow.z-.0012,shadow.z+.0012,storedDepth);
+      }
+
+      vec3 scatteredSunlight(vec2 uv) {
+        float depth=texture2D(tDepth,uv).r;
+        vec3 viewPosition=aoViewPosition(uv,depth);
+        vec3 origin=cameraWorld[3].xyz;
+        vec3 surface=(cameraWorld*vec4(viewPosition,1.)).xyz;
+        vec3 ray=normalize(surface-origin);
+        float travel=min(length(surface-origin),36.);
+        float stepLength=travel/24.;
+        float scattered=0.;
+        // Sunlight is blocked by the same geometry that shadows the surfaces.
+        for(int i=0;i<24;i++) {
+          float distanceAlongRay=(float(i)+.5)*stepLength;
+          vec3 samplePosition=origin+ray*distanceAlongRay;
+          float density=airDensity*exp(-max(samplePosition.y-1.,0.)*.09);
+          scattered+=sunlightAt(samplePosition)*density*stepLength*exp(-airDensity*distanceAlongRay);
+        }
+        float forwardGlow=.55+.9*pow(max(dot(ray,lightToSun),0.),5.);
+        return vec3(1.,.82,.43)*scattered*scatterStrength*forwardGlow;
+      }
       void main(){
         vec2 edge=abs(vUv-.5)*2.;
         float corner=smoothstep(.36,.92,edge.x*edge.y);
@@ -35,23 +71,25 @@ export function createAtmospherePass(composer, camera) {
           color+=texture2D(tDiffuse,sampleUv);
         }
         color/=14.;
-        vec2 direction=sunPosition-vUv;
-        vec2 projected=direction*vec2(aspect,1.);
-        float angle=atan(projected.y,projected.x);
-        float bands=pow(noise(angle*52.+noise(angle*13.)*3.+time*.006),2.4);
-        float visibility=0.;
-        for(int i=0;i<20;i++){
-          float progress=(float(i)+.5)/20.;
-          vec2 uv=clamp(vUv+direction*progress*.93,vec2(.001),vec2(.999));
-          float depth=texture2D(tDepth,uv).x;
-          visibility+=smoothstep(.9988,.9997,depth)*(1.-progress*.36);
-        }
-        visibility/=20.;
-        float distance=length(projected);
-        float falloff=exp(-distance*.60);
-        float shafts=visibility*(.18+bands*.82)*falloff*shaftStrength;
-        color.rgb+=vec3(1.0,.88,.40)*shafts;
+        float contactShade=min(getContactOcclusion(vUv)*aoStrength,aoMaxDarkening);
+        color.rgb*=vec3(1.)-contactShade*vec3(1.06,.96,.93);
+        color.rgb+=scatteredSunlight(vUv);
         gl_FragColor=color;
       }`,
   });
+  // ShaderPass clones its uniform inputs. Rebind live matrices so RenderPass
+  // updates the shadow projection and camera before this fullscreen pass.
+  pass.uniforms.cameraWorld.value = camera.matrixWorld;
+  pass.uniforms.sunShadowMatrix.value = sun.shadow.matrix;
+  pass.uniforms.aoProjectionInverse.value = camera.projectionMatrixInverse;
+  pass.uniforms.aoProjection.value = camera.projectionMatrix;
+  pass.material.depthTest = false;
+  pass.material.depthWrite = false;
+  pass.setSize = (width, height) => pass.uniforms.aoResolution.value.set(width, height);
+  pass.updateLight = () => {
+    pass.uniforms.sunShadowMap.value = sun.shadow.map?.texture || clearShadow;
+    pass.uniforms.lightToSun.value.subVectors(sun.position, sun.target.position).normalize();
+  };
+  pass.setSize(composer.renderTarget1.width, composer.renderTarget1.height);
+  return pass;
 }

@@ -27,29 +27,31 @@ renderer.info.autoReset=false;
 renderer.setClearColor(0x716f58);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0xc5ce89, .018);
+scene.fog = new THREE.FogExp2(0xc5ce89, .014);
 const camera = new THREE.PerspectiveCamera(48, window.innerWidth/window.innerHeight,.1,400);
 const cameraHome = new THREE.Vector3(0, 3.4, 8.9);
 const lookHome = new THREE.Vector3(0, 2.25, -2.5);
 camera.position.copy(cameraHome); camera.lookAt(lookHome);
-scene.add(new THREE.HemisphereLight(0xc9d6a4,0x253715,1.05));
-scene.add(new THREE.AmbientLight(0xdce6a4,.10));
-const sun = new THREE.DirectionalLight(0xffed97,4.6);
+scene.add(new THREE.HemisphereLight(0xa9c1b2,0x172519,.60));
+scene.add(new THREE.AmbientLight(0xdce6a4,.025));
+const sun = new THREE.DirectionalLight(0xffe5a2,8.0);
 sun.position.set(-13,12,-9); sun.target.position.set(0,0,-3);
-sun.castShadow=true; sun.shadow.mapSize.set(2048,2048);
-Object.assign(sun.shadow.camera,{left:-20,right:20,top:20,bottom:-20,near:.5,far:60});
-sun.shadow.bias=-.0004; sun.shadow.normalBias=.055; sun.shadow.radius=3;
+sun.castShadow=true; sun.shadow.mapSize.set(4096,4096);
+Object.assign(sun.shadow.camera,{left:-18,right:18,top:18,bottom:-18,near:.5,far:75});
+sun.shadow.bias=-.00012; sun.shadow.normalBias=.020;
 scene.add(sun,sun.target);
-const fill=new THREE.DirectionalLight(0xb8d394,.4); fill.position.set(8,6,8);scene.add(fill);
+const fill=new THREE.DirectionalLight(0x9fafbf,.12); fill.position.set(8,6,8);scene.add(fill);
 
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene,camera));
-const atmosphere=createAtmospherePass(composer,camera);
+const atmosphere=createAtmospherePass(composer,camera,sun);
 composer.addPass(atmosphere);
 const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth,window.innerHeight),.35,.50,1.15);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 const environment=createEnvironment(scene);
+// The sky glow, surface shadows and volumetric light share one sun direction.
+sun.position.copy(environment.sunlightDirection).multiplyScalar(36).add(sun.target.position);
 const pollen=createDust(scene);
 
 const uniforms={
@@ -165,7 +167,8 @@ async function populate() {
   // Read-only diagnostics are exposed for browser QA; there is no on-screen UI.
   window.sceneDiagnostics={ready:true,plants:vegetation.counts,hatchHalves:2,referenceAssets:true,interaction:'rooted rise, bend and warm glow',reducedMotion};
   canvas.dataset.ready='true';canvas.dataset.plants=JSON.stringify(vegetation.counts);
-  canvas.dataset.revision='tall-greenery-3';canvas.dataset.particles=String(pollen.points.geometry.attributes.position.count);
+  canvas.dataset.revision='lighting-depth-4';canvas.dataset.particles=String(pollen.points.geometry.attributes.position.count);
+  canvas.dataset.lighting='4096 sun shadows, contact occlusion, shadowed volumetric sunlight';
   canvas.dataset.composition='wide moss hatch, continuous crack';canvas.dataset.blur='corners only';
   canvas.dataset.rocks=String(landscapeRocks.placements?.length||0);
   window.sceneRig={hatch:hatch.group,left:hatch.left,right:hatch.right,logoAnchor:hatch.logoAnchor,descentTarget:hatch.descentTarget,camera};
@@ -233,7 +236,7 @@ function render(now) {
     pollen.update(uniforms.time.value,camera);
   }
   atmosphere.uniforms.tDepth.value=composer.readBuffer.depthTexture;
-  atmosphere.uniforms.time.value=uniforms.time.value;
+  atmosphere.updateLight();
   renderer.info.reset();composer.render();
   if(assetsReady) {
     const d=window.sceneDiagnostics;

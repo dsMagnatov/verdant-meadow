@@ -13,6 +13,7 @@ function outsideHatch(x, z, padding = 0) {
 function addPlantMotion(material, uniforms, {
   emission = 1.35, breeze = 1, diffuseBoost = 1, baseEmission = 0, heightRange = 1,
 } = {}) {
+  material.userData.plantMotion = { breeze, heightRange };
   const originalCompile = material.onBeforeCompile;
   material.onBeforeCompile = (shader, renderer) => {
     originalCompile?.call(material, shader, renderer);
@@ -245,8 +246,31 @@ export function createVegetation({
     ferns: 0, herbs: 0, flowers: 0, grassClumps: 0, mossClumps: 0,
     onHatchPlants: 0, onRockPlants: 0, tallHatchPlants: 0, tallRockPlants: 0, fernVertices: 0,
   };
+  const depthMaterials = new WeakMap();
   let herbSurface;
   let flowerSurface;
+
+  function enablePlantShadows(mesh) {
+    mesh.receiveShadow = true;
+    mesh.castShadow = true;
+    const surface = mesh.material;
+    let depth = depthMaterials.get(surface);
+    if (!depth) {
+      const motion = surface.userData.plantMotion ?? { breeze: 1, heightRange: 1 };
+      depth = new THREE.MeshDepthMaterial({
+        depthPacking: THREE.RGBADepthPacking,
+        map: surface.map,
+        alphaMap: surface.alphaMap,
+        alphaTest: surface.alphaTest,
+        side: THREE.DoubleSide,
+      });
+      // Match the cutout and every vertex displacement, including the pointer
+      // ray, so shadows follow the visible leaf silhouette instead of its card.
+      addPlantMotion(depth, uniforms, { emission: 0, ...motion });
+      depthMaterials.set(surface, depth);
+    }
+    mesh.customDepthMaterial = depth;
+  }
   const hasHatchSurface = Boolean(hatch?.contains && hatch?.left && hatch?.right);
   const hatchGroups = hasHatchSurface ? [new THREE.Group(), new THREE.Group()] : null;
   if (hatchGroups) {
@@ -352,22 +376,13 @@ export function createVegetation({
   const vertexCount = fern.getAttribute('position').count;
   const fernCount = Math.min(3500, Math.floor(3_650_000 / vertexCount));
   const fernSurface = addPlantMotion(fernMaterial.clone(), uniforms, {
-    diffuseBoost: 1.8, baseEmission: 0.3,
+    diffuseBoost: 1.8, baseEmission: 0.045,
   });
   fernSurface.side = THREE.DoubleSide;
   const fernMesh = new THREE.InstancedMesh(fern, fernSurface, fernCount);
   fernMesh.name = 'otherlife-ferns';
-  fernMesh.receiveShadow = true;
-  fernMesh.castShadow = true;
+  enablePlantShadows(fernMesh);
   fernMesh.frustumCulled = false;
-  const fernDepth = new THREE.MeshDepthMaterial({
-    depthPacking: THREE.RGBADepthPacking,
-    map: fernSurface.map,
-    alphaMap: fernSurface.alphaMap,
-    alphaTest: fernSurface.alphaTest,
-    side: THREE.DoubleSide,
-  });
-  fernMesh.customDepthMaterial = addPlantMotion(fernDepth, uniforms, { emission: 0 });
   group.add(fernMesh);
 
   let fernIndex = 0;
@@ -438,11 +453,11 @@ export function createVegetation({
       side: THREE.DoubleSide,
       roughness: 0.88,
       metalness: 0,
-    }), uniforms, { emission: 1.25, breeze: 1.2, diffuseBoost: 1.8, baseEmission: 0.3 });
+    }), uniforms, { emission: 1.25, breeze: 1.2, diffuseBoost: 1.8, baseEmission: 0.050 });
     for (let column = 0; column < 8; column++) {
       const herbs = new THREE.InstancedMesh(makeCrossedHerbGeometry(column), herbSurface, 150);
       herbs.name = `gladeye-green-${column}`;
-      herbs.receiveShadow = true;
+      enablePlantShadows(herbs);
       herbs.frustumCulled = false;
       herbs.count = scatter(150, [-12, 12, -19, 7], (index, x, z) => {
         const frontCenter = z > 1.8 && Math.abs(x) < 3.2;
@@ -468,7 +483,7 @@ export function createVegetation({
       side: THREE.DoubleSide,
       roughness: 0.82,
       metalness: 0,
-    }), uniforms, { emission: 0.85, breeze: 1.30, diffuseBoost: 1.3, baseEmission: 0.38 });
+    }), uniforms, { emission: 0.85, breeze: 1.30, diffuseBoost: 1.3, baseEmission: 0.12 });
     // All selected cells include stems: yellow narcissus and small white daisies,
     // with restrained pink/purple accents. The 1050 instances follow 60:25:15.
     const flowerCells = [
@@ -513,7 +528,7 @@ export function createVegetation({
       }
       const flowers = new THREE.InstancedMesh(makeCrossedHerbGeometry(cell.column, cell.row), flowerSurface, cell.amount);
       flowers.name = `wildflowers-${cell.row}-${cell.column}`;
-      flowers.receiveShadow = true;
+      enablePlantShadows(flowers);
       flowers.frustumCulled = false;
       flowers.count = scatter(cell.amount, [-11.5, 11.5, -18, 7], (index, x, z) => {
         const foreground = z > -4.5;
@@ -564,7 +579,7 @@ export function createVegetation({
     side: THREE.DoubleSide,
     roughness: 0.91,
     metalness: 0,
-  }), uniforms, { emission: 0.60, breeze: 0.48, baseEmission: 0.12, heightRange: 0.68 });
+  }), uniforms, { emission: 0.60, breeze: 0.48, baseEmission: 0.018, heightRange: 0.68 });
   const moss = new THREE.InstancedMesh(makeMossRosette(), mossSurface, 3300);
   moss.name = 'fine-leaf-moss-carpet';
   moss.receiveShadow = true;
@@ -617,7 +632,7 @@ export function createVegetation({
     if (tallFernPoints.length) {
       const tallFerns = new THREE.InstancedMesh(fern, fernSurface, tallFernPoints.length);
       tallFerns.name = 'tall-hatch-fern-patches';
-      tallFerns.receiveShadow = true;
+      enablePlantShadows(tallFerns);
       tallFerns.frustumCulled = false;
       tallFernPoints.forEach((point, index) => setPlant(tallFerns, index, point));
       tallFerns.instanceMatrix.needsUpdate = true;
@@ -636,7 +651,7 @@ export function createVegetation({
         if (!points.length) return;
         const tallHerbs = new THREE.InstancedMesh(makeCrossedHerbGeometry(column), herbSurface, points.length);
         tallHerbs.name = `tall-hatch-leafy-stems-${column}`;
-        tallHerbs.receiveShadow = true;
+        enablePlantShadows(tallHerbs);
         tallHerbs.frustumCulled = false;
         points.forEach((point, index) => setPlant(tallHerbs, index, point));
         tallHerbs.instanceMatrix.needsUpdate = true;
@@ -688,7 +703,7 @@ export function createVegetation({
     if (!samples.length) return null;
     const mesh = new THREE.InstancedMesh(geometry, material, samples.length);
     mesh.name = name;
-    mesh.receiveShadow = true;
+    enablePlantShadows(mesh);
     mesh.frustumCulled = false;
     samples.forEach((sample, index) => placeOnRock(mesh, index, sample, minHeight, maxHeight, tall));
     mesh.instanceMatrix.needsUpdate = true;
