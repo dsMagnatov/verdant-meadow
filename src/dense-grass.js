@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { rand, noise2 } from './math.js';
-import { LEFT_GRASS_BOUNDS, leftGrassClearing } from './meadow-layout.js';
+import { LEFT_GRASS_BOUNDS, RIGHT_GRASS_BOUNDS, leftGrassClearing, rightGrassClearing } from './meadow-layout.js';
 
 const TILE_SIZE = 10;
 const POPULATIONS = [
@@ -11,8 +11,10 @@ const POPULATIONS = [
   // A shorter overlapping layer fills the gaps below the tall stone grass.
   // It shares the same tiles and shader, with fewer blade segments.
   { count: 65000, bounds: [-4.9, 4.9, -5.15, 10.55], quality: 1, understory: true },
-  { count: 52000, bounds: LEFT_GRASS_BOUNDS, quality: 0, leftClearing: true },
-  { count: 34000, bounds: LEFT_GRASS_BOUNDS, quality: 1, understory: true, leftClearing: true },
+  { count: 52000, bounds: LEFT_GRASS_BOUNDS, quality: 0, clearing: 'left' },
+  { count: 34000, bounds: LEFT_GRASS_BOUNDS, quality: 1, understory: true, clearing: 'left' },
+  { count: 52000, bounds: RIGHT_GRASS_BOUNDS, quality: 0, clearing: 'right' },
+  { count: 34000, bounds: RIGHT_GRASS_BOUNDS, quality: 1, understory: true, clearing: 'right' },
 ];
 
 function stoneGrassProfile(x, z, hatch) {
@@ -120,7 +122,7 @@ function grassMaterial(uniforms, viewport) {
         float flutter = sin(uGrassTime * 1.9 + aGrassSeed * 6.283) * 0.006;
         vec3 wind = windDirection * height * (0.13 + broadWave * 0.14 + slowWave * 0.050 + flutter);
         vec3 probe = root + axisY * 0.45;
-        float surfaceHover = (1.0 - smoothstep(0.10, 0.95, distance(root, uGrassPointer))) * uGrassPointerActive;
+        float surfaceHover = (1.0 - smoothstep(0.15, 1.20, distance(root, uGrassPointer))) * uGrassPointerActive;
         float rayT = dot(probe - uGrassRayOrigin, uGrassRayDirection);
         vec3 rayPoint = uGrassRayOrigin + max(0.0, rayT) * uGrassRayDirection;
         float rayHover = (1.0 - smoothstep(0.10, 0.48, distance(probe, rayPoint)))
@@ -172,13 +174,17 @@ function grassMaterial(uniforms, viewport) {
       vec3 bladeColor = mix(rootColor, midColor, smoothstep(0.0, 0.46, vGrassHeight));
       bladeColor = mix(bladeColor, tipColor, smoothstep(0.36, 1.0, vGrassHeight));
       diffuseColor.rgb *= bladeColor * (0.82 + vGrassSeed * 0.32);
-      diffuseColor.rgb *= 1.0 + vGrassHover * vGrassHeight * 0.16;`);
+      diffuseColor.rgb *= mix(vec3(1.0), vec3(1.20, 1.36, 1.12),
+        vGrassHover * smoothstep(0.02, 0.72, vGrassHeight));`);
     shader.fragmentShader = shader.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-      totalEmissiveRadiance += vec3(0.065, 0.16, 0.022)
-        * pow(vGrassHeight, 2.8) * vGrassHover;`);
+      // Match the fern's warm green hover light while retaining dark roots.
+      vec3 grassHoverGlow = mix(vec3(0.54, 1.07, 0.19), vec3(1.22, 1.32, 0.33), vGrassHeight);
+      grassHoverGlow *= clamp(diffuseColor.rgb * 1.8, vec3(0.12), vec3(0.90));
+      totalEmissiveRadiance += grassHoverGlow * vGrassHover
+        * (0.04 + 0.96 * pow(vGrassHeight, 1.6)) * 1.35;`);
     shader.fragmentShader = shader.fragmentShader.replace('#include <lights_fragment_begin>', translucentLighting);
   };
-  material.customProgramCacheKey = () => 'dense-grass-layered-cover-v5';
+  material.customProgramCacheKey = () => 'dense-grass-warm-hover-v6';
   return material;
 }
 
@@ -203,7 +209,7 @@ export function createDenseGrass({ parent, groundHeight, uniforms, hatch, terrai
   }
   const random = rand(420938);
   const buckets = new Map();
-  const counts = { grassClumps: 0, grassBlades: 0, grassNear: 0, grassMid: 0, grassFar: 0, grassTiles: 0, grassSeam: 0, grassUnderstory: 0, grassLeftClearing: 0 };
+  const counts = { grassClumps: 0, grassBlades: 0, grassNear: 0, grassMid: 0, grassFar: 0, grassTiles: 0, grassSeam: 0, grassUnderstory: 0, grassLeftClearing: 0, grassRightClearing: 0 };
   const viewport = { value: typeof window === 'undefined' ? 1080 : window.innerHeight * Math.min(window.devicePixelRatio || 1, 1.6) };
   const material = grassMaterial(uniforms, viewport);
   const shapes = [bladeGeometry(0), bladeGeometry(1), bladeGeometry(2)];
@@ -213,12 +219,12 @@ export function createDenseGrass({ parent, groundHeight, uniforms, hatch, terrai
       // Grass has its own coherent patches, including sunlit bare stone between
       // fern clumps, instead of inheriting the fern canopy's shadowed root mask.
       if (profile.distance < .065) return -1;
-      if (!population.seam && !population.understory && !population.leftClearing && profile.patch <= .55) return -1;
+      if (!population.seam && !population.understory && !population.clearing && profile.patch <= .55) return -1;
       if (!hatch.surfaceHeight || y <= hatch.surfaceHeight(x, z) + 0.035) {
         return hatch.leafForPoint?.(x, z) === hatch.left || (!hatch.leafForPoint && x < 0) ? 1 : 2;
       }
     }
-    if (population.seam || (population.understory && !population.leftClearing)) return -1;
+    if (population.seam || (population.understory && !population.clearing)) return -1;
     if (terrainHoleContains?.(x, z)) return -1;
     return 0;
   }
@@ -229,7 +235,8 @@ export function createDenseGrass({ parent, groundHeight, uniforms, hatch, terrai
     for (let attempt = 0; accepted < population.count && attempt < population.count * 16; attempt++) {
       const x = THREE.MathUtils.lerp(population.bounds[0], population.bounds[1], random());
       const z = THREE.MathUtils.lerp(population.bounds[2], population.bounds[3], random());
-      if (population.leftClearing && random() > leftGrassClearing(x, z)) continue;
+      if (population.clearing && random() > (population.clearing === 'left'
+        ? leftGrassClearing(x, z) : rightGrassClearing(x, z))) continue;
       const density = 0.59 + (noise2(x * 0.30, z * 0.30) - 0.5) * 0.54;
       if (random() > density) continue;
       const y = groundHeight(x, z);
@@ -239,7 +246,7 @@ export function createDenseGrass({ parent, groundHeight, uniforms, hatch, terrai
       if (ownerIndex < 0) continue;
       const onStone = ownerIndex > 0;
       if (onStone) {
-        const seamDensity = population.leftClearing ? 1 : population.understory
+        const seamDensity = population.clearing ? 1 : population.understory
           ? Math.max(profile.outerFade, THREE.MathUtils.smoothstep(profile.patch, .55, .66))
           : population.seam
           ? profile.outerFade * (.65 + noise2(x * .85 + 6.2,z * .73 + 19.1) * .35)
@@ -247,7 +254,7 @@ export function createDenseGrass({ parent, groundHeight, uniforms, hatch, terrai
         if (random() > profile.fringe * seamDensity) continue;
       }
       const seed = random();
-      const patchFringe = onStone && !population.seam && !population.understory && !population.leftClearing
+      const patchFringe = onStone && !population.seam && !population.understory && !population.clearing
         ? THREE.MathUtils.smoothstep(profile.patch,.55,.66) : 1;
       const edgeHeight = onStone ? .20 + .80 * Math.sqrt(profile.fringe) : 1;
       const height = population.understory
@@ -266,7 +273,8 @@ export function createDenseGrass({ parent, groundHeight, uniforms, hatch, terrai
     counts[['grassNear', 'grassMid', 'grassFar'][population.quality]] += accepted;
     if(population.seam)counts.grassSeam += accepted;
     if(population.understory)counts.grassUnderstory += accepted;
-    if(population.leftClearing)counts.grassLeftClearing += accepted;
+    if(population.clearing === 'left')counts.grassLeftClearing += accepted;
+    if(population.clearing === 'right')counts.grassRightClearing += accepted;
   }
 
   const dummy = new THREE.Object3D(), matrix = new THREE.Matrix4();

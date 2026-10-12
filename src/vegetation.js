@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { rand, noise2 } from './math.js';
 import { createDenseGrass } from './dense-grass.js';
-import { leftGrassClearing } from './meadow-layout.js';
+import { leftGrassClearing, rightGrassClearing } from './meadow-layout.js';
 
 const HATCH_X = 2.58;
 const HATCH_Z = 1.82;
@@ -243,11 +243,12 @@ export function createVegetation({
   scene.add(group);
   const random = rand(301824);
   const clearingRandom = rand(8975);
+  const rightClearingRandom = rand(14978);
   const dummy = new THREE.Object3D();
   const tint = new THREE.Color();
   const counts = {
     ferns: 0, herbs: 0, flowers: 0, grassClumps: 0, mossClumps: 0,
-    onHatchPlants: 0, onRockPlants: 0, tallHatchPlants: 0, tallRockPlants: 0, fernVertices: 0, leftClearingPlantsRemoved: 0,
+    onHatchPlants: 0, onRockPlants: 0, tallHatchPlants: 0, tallRockPlants: 0, fernVertices: 0, leftClearingPlantsRemoved: 0, rightClearingPlantsRemoved: 0,
   };
   const depthMaterials = new WeakMap();
   let herbSurface;
@@ -309,9 +310,13 @@ export function createVegetation({
       const x = world.elements[12], z = world.elements[14];
       // Filter the finished roots with a separate RNG so the rest of the
       // meadow, flowers and boulder clusters keep their existing placement.
-      const clearing = thinInClearing ? leftGrassClearing(x, z) : 0;
-      if (clearing > 0 && clearingRandom() < clearing * .74) {
-        counts.leftClearingPlantsRemoved++;
+      const leftClearing = thinInClearing ? leftGrassClearing(x, z) : 0;
+      const rightClearing = thinInClearing ? rightGrassClearing(x, z) : 0;
+      const thinLeft = leftClearing > 0 && clearingRandom() < leftClearing * .74;
+      const thinRight = rightClearing > 0 && rightClearingRandom() < rightClearing * .64;
+      if (thinLeft || thinRight) {
+        if (thinLeft) counts.leftClearingPlantsRemoved++;
+        if (thinRight) counts.rightClearingPlantsRemoved++;
         if (isFern) {
           counts.ferns--;
           counts.fernVertices -= mesh.geometry.getAttribute('position').count;

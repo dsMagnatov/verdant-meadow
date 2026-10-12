@@ -41,4 +41,6 @@ The foreground stone grass includes a dense shorter layer of leaning blades unde
 
 The left foreground clearing overrides the exposed-stone grass mask and adds both grass layers on the actual stone/terrain surface. A shared irregular region thins the fern and leafy shrub roots by up to 74%, leaving scattered reactive plants above the grass. Filtering uses a separate random sequence so flowers, boulders and the rest of the meadow keep their positions.
 
+The right foreground uses the same dense grass layers with its own irregular edge and up to 64% shrub thinning. Separate random sequences preserve the established left clearing. Grass hover light follows the fern's warm green/yellow tint, brightening the blade tips while keeping the roots darker; the soft response covers the surrounding rooted strands without adding lights or render passes.
+
 Run `node scripts/check-journey.mjs` to check clearance before the camera crosses the ground, continuous forward orientation, reverse scrolling, frame-rate independent damping and reduced-motion behavior. Native scroll remains available with wheel, trackpad and keyboard. Reduced motion removes decorative wind/parallax and scroll damping while retaining the user-controlled journey.
