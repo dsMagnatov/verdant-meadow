@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { makeCrossedHerbGeometry } from './vegetation.js';
 import { rand } from './math.js';
+import { REFERENCE_WIDTH, REFERENCE_HEIGHT } from './responsive.js';
 
 function addSlowWind(material, time, height, reducedMotion) {
   material.onBeforeCompile = shader => {
@@ -61,7 +62,10 @@ export function createFinaleGarden({ camera, fernGeometry, fernMap, atlas, time,
       transform.position.set(plant.side * plant.u * halfHeight * camera.aspect,
         plant.v * halfHeight, -plant.depth);
       transform.rotation.copy(plant.rotation);
-      transform.scale.setScalar(plant.scale);
+      // Match the UI's reference-frame scale when desktop aspect ratios change.
+      const viewScale = Math.min(1, camera.aspect / (REFERENCE_WIDTH / REFERENCE_HEIGHT));
+      const portraitScale = camera.aspect < 1 ? .5 : 1;
+      transform.scale.setScalar(plant.scale * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / Math.tan(THREE.MathUtils.degToRad(24)) * viewScale * portraitScale);
       transform.updateMatrix();
       plant.mesh.setMatrixAt(plant.index, transform.matrix);
     }

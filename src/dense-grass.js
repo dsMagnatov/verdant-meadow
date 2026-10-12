@@ -213,7 +213,7 @@ export function createDenseGrass({ parent, groundHeight, uniforms, hatch, terrai
   const random = rand(420938);
   const buckets = new Map();
   const counts = { grassClumps: 0, grassBlades: 0, grassNear: 0, grassMid: 0, grassFar: 0, grassTiles: 0, grassSeam: 0, grassUnderstory: 0, grassLeftClearing: 0, grassRightClearing: 0 };
-  const viewport = { value: typeof window === 'undefined' ? 1080 : window.innerHeight * Math.min(window.devicePixelRatio || 1, 1.6) };
+  const viewport = { value: uniforms.renderResolution?.value.y ?? 1080 };
   const material = grassMaterial(uniforms, viewport);
   const shapes = [bladeGeometry(0), bladeGeometry(1), bladeGeometry(2)];
 
@@ -316,7 +316,7 @@ export function createDenseGrass({ parent, groundHeight, uniforms, hatch, terrai
   const worldCenter = new THREE.Vector3(), sphere = new THREE.Sphere();
   const frustum = new THREE.Frustum(), projection = new THREE.Matrix4();
   function update(camera) {
-    viewport.value = typeof window === 'undefined' ? 1080 : window.innerHeight * Math.min(window.devicePixelRatio || 1, 1.6);
+    viewport.value = uniforms.renderResolution?.value.y ?? 1080;
     for (const owner of owners) owner.group.updateWorldMatrix(true, true);
     projection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     frustum.setFromProjectionMatrix(projection);

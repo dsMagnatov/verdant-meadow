@@ -22,16 +22,18 @@ import { groundHeight } from './math.js';
 import { createMenu } from './menu.js';
 import { createTunnelStory } from './tunnel-story.js';
 import { createFinaleGarden } from './finale-garden.js';
+import { createViewport } from './responsive.js';
 import './style.css';
 
 const canvas = document.querySelector('#scene');
-const navigation = createMenu();
+const viewport = createViewport();
+const navigation = createMenu({ readViewportHeight: viewport.readJourneyHeight });
 const heroCopy = document.querySelector('#hero-copy');
 const logoLightTarget = new THREE.Vector3();
 let lastHeroOpacity=-1;
 const renderer = new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.6));
+renderer.setPixelRatio(viewport.state.pixelRatio);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.02;
@@ -43,7 +45,7 @@ renderer.setClearColor(0x716f58);
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0xc5ce89, .014);
-const camera = new THREE.PerspectiveCamera(48, window.innerWidth/window.innerHeight,.1,400);
+const camera = new THREE.PerspectiveCamera(viewport.state.fov, window.innerWidth/window.innerHeight,.1,400);
 scene.add(camera);
 const cameraHome = new THREE.Vector3(0, 3.4, 8.9);
 const lookHome = new THREE.Vector3(0, 2.25, -2.5);
@@ -53,7 +55,9 @@ const ambient=new THREE.AmbientLight(0xdce6a4,.025);
 scene.add(hemisphere,ambient);
 const sun = new THREE.DirectionalLight(0xffe5a2,8.0);
 sun.position.set(-13,12,-9); sun.target.position.set(0,0,-3);
-sun.castShadow=true; sun.shadow.mapSize.set(4096,4096);
+sun.castShadow=true;
+let shadowSize = viewport.state.mobile ? 2048 : 4096;
+sun.shadow.mapSize.set(shadowSize,shadowSize);
 Object.assign(sun.shadow.camera,{left:-18,right:18,top:18,bottom:-18,near:.5,far:75});
 sun.shadow.bias=-.00012; sun.shadow.normalBias=.020;
 scene.add(sun,sun.target);
@@ -85,7 +89,7 @@ cavePollen.group.scale.x=.18;
 cavePollen.points.geometry.setDrawRange(0,320);
 cavePollen.group.visible=false;
 const surfaceFogColor=new THREE.Color(0xc5ce89), caveFogColor=new THREE.Color(0x102326);
-const journey=createScrollJourney({heightMultiplier:JOURNEY_SCROLL_VIEWPORTS,reducedMotion:window.matchMedia('(prefers-reduced-motion: reduce)').matches});
+const journey=createScrollJourney({heightMultiplier:JOURNEY_SCROLL_VIEWPORTS,readViewportHeight:viewport.readJourneyHeight,reducedMotion:window.matchMedia('(prefers-reduced-motion: reduce)').matches});
 const pointerSurfaces=[environment.ground];
 let hatchRig=null, underground=null, caveVegetation=null, grassField=null, glassLogo=null, finaleGarden=null;
 
@@ -232,10 +236,10 @@ async function populate() {
   // Read-only scene diagnostics are exposed for browser QA.
   window.sceneDiagnostics={ready:true,plants:vegetation.counts,hatchHalves:2,referenceAssets:true,interaction:'rooted rise, bend and warm glow',reducedMotion};
   canvas.dataset.ready='true';canvas.dataset.plants=JSON.stringify(vegetation.counts);
-  canvas.dataset.revision='numeric-comparison-frosted-logo-17';canvas.dataset.particles=String(pollen.points.geometry.attributes.position.count);
+  canvas.dataset.revision='responsive-desktop-mobile-18';canvas.dataset.particles=String(pollen.points.geometry.attributes.position.count);
   canvas.dataset.finalePlants=String(finaleGarden.count);
   canvas.dataset.logo=JSON.stringify(glassLogo.details);
-  canvas.dataset.lighting='4096 sun shadows, contact occlusion, shadowed volumetric sunlight';
+  resizeScene();
   canvas.dataset.composition='wide moss hatch, continuous crack';canvas.dataset.blur='broad lower corners and soft bottom center';
   canvas.dataset.hoverLight='single screen circle, radius 22.5% of viewport height';
   canvas.dataset.rocks=String(landscapeRocks.placements?.length||0);
@@ -244,21 +248,43 @@ async function populate() {
   ktx.dispose();draco.dispose();
 }
 
-window.addEventListener('pointermove',event=>{
+let touchPointer=false;
+function readPointer(event) {
   pointer.set(event.clientX/window.innerWidth*2-1,1-event.clientY/window.innerHeight*2);
   uniforms.pointerScreen.value.set(event.clientX/window.innerWidth,1-event.clientY/window.innerHeight);
+  touchPointer=event.pointerType==='touch';
   pointerInside=!navigation.isOpen;
-},{passive:true});
+}
+window.addEventListener('pointermove',readPointer,{passive:true});
+window.addEventListener('pointerdown',readPointer,{passive:true});
+const releaseTouch=event=>{if(event.pointerType==='touch'){pointerInside=false;pointer.set(0,0);}};
+window.addEventListener('pointerup',releaseTouch,{passive:true});
+window.addEventListener('pointercancel',releaseTouch,{passive:true});
 document.addEventListener('pointerleave',()=>{pointerInside=false;});
 window.addEventListener('blur',()=>{pointerInside=false;});
 document.addEventListener('visibilitychange',()=>{visible=!document.hidden;lastTime=performance.now();});
-window.addEventListener('resize',()=>{
-  camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();
+function resizeScene() {
+  const view=viewport.sync();
+  camera.aspect=view.width/view.height;camera.fov=view.fov;camera.updateProjectionMatrix();
+  if(glassLogo)glassLogo.group.scale.setScalar(view.mobile ? (camera.aspect<1 ? .82 : .72) : 1);
   finaleGarden?.resize();
-  renderer.setSize(window.innerWidth,window.innerHeight);composer.setSize(window.innerWidth,window.innerHeight);
+  if(renderer.getPixelRatio()!==view.pixelRatio){renderer.setPixelRatio(view.pixelRatio);composer.setPixelRatio(view.pixelRatio);}
+  const nextShadowSize=view.mobile?2048:4096;
+  if(nextShadowSize!==shadowSize){
+    shadowSize=nextShadowSize;sun.shadow.mapSize.set(shadowSize,shadowSize);
+    sun.shadow.map?.dispose();sun.shadow.map=null;sun.shadow.needsUpdate=true;
+  }
+  renderer.setSize(view.width,view.height);composer.setSize(view.width,view.height);
   uniforms.renderResolution.value.set(composer.renderTarget1.width,composer.renderTarget1.height);
   antialiasing.uniforms.resolution.value.set(1/composer.renderTarget1.width,1/composer.renderTarget1.height);
-});
+  canvas.dataset.layout=view.mobile?'mobile':'desktop';
+  canvas.dataset.viewport=`${view.width}x${view.height}`;
+  canvas.dataset.uiScale=view.scale.toFixed(4);
+  canvas.dataset.fov=view.fov.toFixed(2);
+  canvas.dataset.pixelRatio=String(view.pixelRatio);
+  canvas.dataset.lighting=`${shadowSize} sun shadows, contact occlusion, shadowed volumetric sunlight`;
+}
+window.addEventListener('resize',resizeScene);
 
 function updatePointer(dt) {
   smoothPointer.lerp(pointer,1-Math.exp(-4*dt));
@@ -293,7 +319,7 @@ function render(now) {
   const heroOpacity=1-THREE.MathUtils.smoothstep(pose.descentProgress,.015,.14);
   if(heroOpacity!==lastHeroOpacity) {
     heroCopy.style.opacity=heroOpacity.toFixed(3);
-    heroCopy.style.transform=`translateY(${((1-heroOpacity)*-26).toFixed(2)}px)`;
+    heroCopy.style.transform=`translateY(${((1-heroOpacity)*-26*(viewport.state.mobile?1:viewport.state.scale)).toFixed(2)}px)`;
     heroCopy.style.visibility=heroOpacity===0?'hidden':'visible';
     lastHeroOpacity=heroOpacity;
   }
@@ -319,11 +345,12 @@ function render(now) {
   const shadowFocus=THREE.MathUtils.smoothstep(pose.descentProgress,.12,.45);
   sun.target.position.set(0,-6*shadowFocus,-3-10*shadowFocus);
   sun.position.copy(environment.sunlightDirection).multiplyScalar(36).add(sun.target.position);
-  const influence=reducedMotion?0:pointerPresence;
+  const influence=reducedMotion||touchPointer?0:pointerPresence;
   camera.position.copy(pose.position);
   camera.position.x+=smoothPointer.x*.22*influence;
   camera.position.y+=smoothPointer.y*.09*influence;
-  camera.lookAt(pose.target.x+smoothPointer.x*.08*influence,pose.target.y+smoothPointer.y*.035*influence,pose.target.z);
+  const portraitAim=viewport.state.mobile&&camera.aspect<1 ? .45*(1-THREE.MathUtils.smoothstep(pose.descentProgress,.05,.3)) : 0;
+  camera.lookAt(pose.target.x+smoothPointer.x*.08*influence,pose.target.y-portraitAim+smoothPointer.y*.035*influence,pose.target.z);
   camera.updateMatrixWorld();
   grassField?.update(camera);
   updatePointer(dt);

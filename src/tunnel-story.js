@@ -27,6 +27,7 @@ export function createTunnelStory({ reducedMotion = false } = {}) {
   });
   cards.forEach(card => observer.observe(card));
   window.addEventListener('pointermove', event => {
+    if (event.pointerType === 'touch') { pointer.present = false; return; }
     pointer.x = event.clientX; pointer.y = event.clientY; pointer.present = true;
   }, { passive: true });
   document.addEventListener('pointerleave', () => { pointer.present = false; });
@@ -47,8 +48,8 @@ export function createTunnelStory({ reducedMotion = false } = {}) {
       if (value !== lastValues[index]) {
         card.style.opacity = String(value);
         card.style.visibility = value > 0 ? 'visible' : 'hidden';
-        card.style.filter = reducedMotion || value === 1 ? 'none' : `blur(${((1 - value) * 18).toFixed(2)}px)`;
-        card.style.setProperty('--reveal-y', reducedMotion ? '0px' : `${((1 - value) * 38).toFixed(2)}px`);
+        card.style.filter = reducedMotion || value === 1 ? 'none' : `blur(calc(${((1 - value) * 18).toFixed(2)} * var(--card-unit, var(--u))))`;
+        card.style.setProperty('--reveal-y', reducedMotion ? '0px' : `calc(${((1 - value) * 38).toFixed(2)} * var(--card-unit, var(--u)))`);
         card.style.setProperty('--reveal-scale', reducedMotion ? '1' : String(.95 + value * .05));
         card.setAttribute('aria-hidden', String(value < .5));
         lastValues[index] = value;

@@ -1,5 +1,5 @@
 /** Native modal focus handling, animated dismissal and the existing scroll journey. */
-export function createMenu() {
+export function createMenu({ readViewportHeight = () => window.innerHeight } = {}) {
   const dialog = document.querySelector('#site-menu');
   const toggle = document.querySelector('#menu-toggle');
   const closeButton = dialog.querySelector('.menu-close');
@@ -8,7 +8,7 @@ export function createMenu() {
   // Real fragment targets also support opening a destination in a new tab.
   for (const link of dialog.querySelectorAll('.menu-link')) {
     const anchor = document.querySelector(link.getAttribute('href'));
-    anchor.style.top = `${Number(link.dataset.scroll) * 100}vh`;
+    anchor.style.top = `calc(${Number(link.dataset.scroll)} * var(--scroll-viewport, 100vh))`;
   }
 
   function open() {
@@ -34,7 +34,7 @@ export function createMenu() {
     if (pendingProgress !== null) {
       const progress = pendingProgress;
       pendingProgress = null;
-      window.scrollTo({ top: progress * window.innerHeight,
+      window.scrollTo({ top: progress * readViewportHeight(),
         behavior: reducedMotion.matches ? 'instant' : 'smooth' });
     }
   }
@@ -58,11 +58,6 @@ export function createMenu() {
       event.preventDefault();
       close(Number(link.dataset.scroll));
     } else if (event.target === dialog) close();
-  });
-  dialog.addEventListener('wheel', event => event.preventDefault(), { passive: false });
-  dialog.addEventListener('touchmove', event => event.preventDefault(), { passive: false });
-  dialog.addEventListener('keydown', event => {
-    if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'].includes(event.key)) event.preventDefault();
   });
   reducedMotion.addEventListener('change', () => {
     if (reducedMotion.matches && closing) {
