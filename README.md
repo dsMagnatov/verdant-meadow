@@ -21,7 +21,8 @@ Build with `pnpm build`, then serve the `dist` directory (`pnpm preview`). Requi
 - `src/scroll-journey.js`: a reversible five-viewport scroll journey, smoothed progress and continuous camera keyframes.
 - `src/underground.js`: the real terrain aperture, shaft walls, ledges, arched tunnel and interior lights.
 - `src/underground-vegetation.js`: rooted growth, hanging vines and cursor-responsive cave foliage.
-- `src/postprocessing.js`: shadow-map ray marching through sunlit air, contact occlusion and blur restricted to the screen corners.
+- `src/postprocessing.js`: shadow-map ray marching through sunlit air, contact occlusion and soft foreground blur across the lower corners and bottom center.
+- `src/hover-light.js`: one shared circular light falloff for grass, ferns and herbs.
 - `src/contact-occlusion.js`: depth-based local occlusion shared with the atmosphere shader.
 - `src/math.js`: deterministic noise, scatter and shared terrain height.
 
@@ -41,6 +42,8 @@ The foreground stone grass includes a dense shorter layer of leaning blades unde
 
 The left foreground clearing overrides the exposed-stone grass mask and adds both grass layers on the actual stone/terrain surface. A shared irregular region thins the fern and leafy shrub roots by up to 74%, leaving scattered reactive plants above the grass. Filtering uses a separate random sequence so flowers, boulders and the rest of the meadow keep their positions.
 
-The right foreground uses the same dense grass layers with its own irregular edge and up to 64% shrub thinning. Separate random sequences preserve the established left clearing. Grass hover light follows the fern's warm green/yellow tint, brightening the blade tips while keeping the roots darker; the soft response covers the surrounding rooted strands without adding lights or render passes.
+The right foreground uses the same dense grass layers with its own irregular edge and up to 64% shrub thinning. Separate random sequences preserve the established left clearing. Grass hover light follows the fern's warm green/yellow tint, brightening the blade tips while keeping the roots darker.
+
+All foliage uses one screen-space hover light with a smooth, aspect-correct radius of 22.5% of the viewport height. Lighting no longer combines the separate surface/ray proximity fields of tall and short plant layers; those fields still drive rooted motion and matching shadows. The larger foreground blur runs after atmosphere and bloom, so contact shadows soften with the image. A prefiltered quarter-resolution image receives a separable Gaussian blur, then blends across the lower corners and bottom center while leaving the central composition sharp. The small depth-free blur buffers avoid depth feedback and resize with the framebuffer.
 
 Run `node scripts/check-journey.mjs` to check clearance before the camera crosses the ground, continuous forward orientation, reverse scrolling, frame-rate independent damping and reduced-motion behavior. Native scroll remains available with wheel, trackpad and keyboard. Reduced motion removes decorative wind/parallax and scroll damping while retaining the user-controlled journey.

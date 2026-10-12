@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { rand, noise2 } from './math.js';
+import { bindHoverLight } from './hover-light.js';
 import { LEFT_GRASS_BOUNDS, RIGHT_GRASS_BOUNDS, leftGrassClearing, rightGrassClearing } from './meadow-layout.js';
 
 const TILE_SIZE = 10;
@@ -167,6 +168,7 @@ function grassMaterial(uniforms, viewport) {
       varying float vGrassHeight;
       varying float vGrassHover;
       varying float vGrassSeed;`);
+    bindHoverLight(shader, uniforms);
     shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
       vec3 rootColor = vec3(0.014, 0.041, 0.005);
       vec3 midColor = vec3(0.12, 0.28, 0.030);
@@ -174,17 +176,18 @@ function grassMaterial(uniforms, viewport) {
       vec3 bladeColor = mix(rootColor, midColor, smoothstep(0.0, 0.46, vGrassHeight));
       bladeColor = mix(bladeColor, tipColor, smoothstep(0.36, 1.0, vGrassHeight));
       diffuseColor.rgb *= bladeColor * (0.82 + vGrassSeed * 0.32);
+      float grassLight = meadowHoverLight();
       diffuseColor.rgb *= mix(vec3(1.0), vec3(1.20, 1.36, 1.12),
-        vGrassHover * smoothstep(0.02, 0.72, vGrassHeight));`);
+        grassLight * smoothstep(0.02, 0.72, vGrassHeight));`);
     shader.fragmentShader = shader.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
       // Match the fern's warm green hover light while retaining dark roots.
       vec3 grassHoverGlow = mix(vec3(0.54, 1.07, 0.19), vec3(1.22, 1.32, 0.33), vGrassHeight);
       grassHoverGlow *= clamp(diffuseColor.rgb * 1.8, vec3(0.12), vec3(0.90));
-      totalEmissiveRadiance += grassHoverGlow * vGrassHover
+      totalEmissiveRadiance += grassHoverGlow * grassLight
         * (0.04 + 0.96 * pow(vGrassHeight, 1.6)) * 1.35;`);
     shader.fragmentShader = shader.fragmentShader.replace('#include <lights_fragment_begin>', translucentLighting);
   };
-  material.customProgramCacheKey = () => 'dense-grass-warm-hover-v6';
+  material.customProgramCacheKey = () => 'dense-grass-single-hover-v7';
   return material;
 }
 

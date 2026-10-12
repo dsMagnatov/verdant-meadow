@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { rand, noise2 } from './math.js';
 import { createDenseGrass } from './dense-grass.js';
 import { leftGrassClearing, rightGrassClearing } from './meadow-layout.js';
+import { bindHoverLight } from './hover-light.js';
 
 const HATCH_X = 2.58;
 const HATCH_Z = 1.82;
@@ -86,11 +87,13 @@ export function addPlantMotion(material, uniforms, {
          varying float vPlantHover;
          varying float vPlantHeight;`,
       );
+      bindHoverLight(shader, uniforms);
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <color_fragment>',
         `#include <color_fragment>
+         float plantLight = meadowHoverLight();
          diffuseColor.rgb *= ${diffuseBoost.toFixed(3)}
-             * mix(vec3(1.0), vec3(1.16, 1.28, 1.05), vPlantHover);`,
+             * mix(vec3(1.0), vec3(1.16, 1.28, 1.05), plantLight);`,
       );
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <emissivemap_fragment>',
@@ -98,12 +101,12 @@ export function addPlantMotion(material, uniforms, {
          totalEmissiveRadiance += diffuseColor.rgb * ${baseEmission.toFixed(3)};
          vec3 hoverGlow = mix(vec3(0.54, 1.07, 0.19), vec3(1.22, 1.32, 0.33), vPlantHeight);
          hoverGlow *= clamp(diffuseColor.rgb * 1.8, vec3(0.12), vec3(0.90));
-         totalEmissiveRadiance += hoverGlow * vPlantHover
+         totalEmissiveRadiance += hoverGlow * plantLight
              * (0.10 + 0.90 * pow(vPlantHeight, 1.6)) * ${emission.toFixed(3)};`,
       );
     }
   };
-  material.customProgramCacheKey = () => `rooted-meadow-${emission}-${breeze}-${diffuseBoost}-${baseEmission}-${heightRange}`;
+  material.customProgramCacheKey = () => `rooted-meadow-single-light-${emission}-${breeze}-${diffuseBoost}-${baseEmission}-${heightRange}`;
   material.needsUpdate = true;
   return material;
 }

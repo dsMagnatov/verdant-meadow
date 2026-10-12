@@ -9,7 +9,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
-import { createAtmospherePass } from './postprocessing.js';
+import { createAtmospherePass, createForegroundBlurPass } from './postprocessing.js';
 import { createEnvironment, scatterRocks, createDust } from './environment.js';
 import { createVegetation } from './vegetation.js';
 import { createHatch, hatchContains, hatchHeight } from './hatch.js';
@@ -54,6 +54,8 @@ const atmosphere=createAtmospherePass(composer,camera,sun);
 composer.addPass(atmosphere);
 const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth,window.innerHeight),.35,.50,1.15);
 composer.addPass(bloom);
+const foregroundBlur=createForegroundBlurPass(composer.renderTarget1.width,composer.renderTarget1.height);
+composer.addPass(foregroundBlur);
 composer.addPass(new OutputPass());
 // Edge-only antialiasing keeps fine grass strands stable without a multisample
 // HDR framebuffer. Run after tone mapping so contrast detection uses sRGB.
@@ -92,6 +94,9 @@ terrainGeometry.setIndex(keptIndices);
 const uniforms={
   time:{value:0},pointerWorld:{value:new THREE.Vector3(1000,0,1000)},pointerActive:{value:0},
   pointerRayOrigin:{value:new THREE.Vector3()},pointerRayDirection:{value:new THREE.Vector3(0,0,-1)},pointerPresence:{value:0},
+  pointerScreen:{value:new THREE.Vector2(-2,-2)},
+  renderResolution:{value:new THREE.Vector2(composer.renderTarget1.width,composer.renderTarget1.height)},
+  hoverRadius:{value:.225},
 };
 const pointer=new THREE.Vector2(0,0), smoothPointer=new THREE.Vector2(0,0);
 const targetWorld=new THREE.Vector3(1000,0,1000), raycaster=new THREE.Raycaster();
@@ -209,9 +214,10 @@ async function populate() {
   // Read-only diagnostics are exposed for browser QA; there is no on-screen UI.
   window.sceneDiagnostics={ready:true,plants:vegetation.counts,hatchHalves:2,referenceAssets:true,interaction:'rooted rise, bend and warm glow',reducedMotion};
   canvas.dataset.ready='true';canvas.dataset.plants=JSON.stringify(vegetation.counts);
-  canvas.dataset.revision='right-clearing-hover-10';canvas.dataset.particles=String(pollen.points.geometry.attributes.position.count);
+  canvas.dataset.revision='single-halo-defocus-11';canvas.dataset.particles=String(pollen.points.geometry.attributes.position.count);
   canvas.dataset.lighting='4096 sun shadows, contact occlusion, shadowed volumetric sunlight';
-  canvas.dataset.composition='wide moss hatch, continuous crack';canvas.dataset.blur='corners only';
+  canvas.dataset.composition='wide moss hatch, continuous crack';canvas.dataset.blur='broad lower corners and soft bottom center';
+  canvas.dataset.hoverLight='single screen circle, radius 22.5% of viewport height';
   canvas.dataset.rocks=String(landscapeRocks.placements?.length||0);
   canvas.dataset.cavePlants=JSON.stringify(caveVegetation.counts);
   window.sceneRig={hatch:hatch.group,left:hatch.left,right:hatch.right,logoAnchor:hatch.logoAnchor,descentTarget:hatch.descentTarget,camera,underground:underground.group};
@@ -220,6 +226,7 @@ async function populate() {
 
 window.addEventListener('pointermove',event=>{
   pointer.set(event.clientX/window.innerWidth*2-1,1-event.clientY/window.innerHeight*2);
+  uniforms.pointerScreen.value.set(event.clientX/window.innerWidth,1-event.clientY/window.innerHeight);
   pointerInside=true;
 },{passive:true});
 document.addEventListener('pointerleave',()=>{pointerInside=false;});
@@ -228,7 +235,7 @@ document.addEventListener('visibilitychange',()=>{visible=!document.hidden;lastT
 window.addEventListener('resize',()=>{
   camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth,window.innerHeight);composer.setSize(window.innerWidth,window.innerHeight);
-  atmosphere.uniforms.aspect.value=camera.aspect;
+  uniforms.renderResolution.value.set(composer.renderTarget1.width,composer.renderTarget1.height);
   antialiasing.uniforms.resolution.value.set(1/composer.renderTarget1.width,1/composer.renderTarget1.height);
 });
 
