@@ -1,14 +1,28 @@
 <!doctype html>
-<html lang="uk">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#394335" />
-    <meta name="description" content="An interactive three-dimensional moss valley and a scroll-driven descent into a living stone tunnel." />
-    <title>Moss valley</title>
+    <meta name="description" content="Verdant — an immersive meadow, a rotating glass emblem and a scroll-driven journey into a living stone tunnel." />
+    <link rel="preload" href="/assets/fonts/instrument-serif-regular.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/assets/fonts/instrument-serif-italic.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/assets/fonts/kapakana-regular.woff2" as="font" type="font/woff2" crossorigin />
+    <title>Verdant</title>
   </head>
   <body>
-    <canvas id="scene" aria-label="Тривимірна мохова долина. Прокручуйте, щоб розкрити кам’яний люк і спуститися в підземний тунель."></canvas>
+    <canvas id="scene" lang="uk" aria-label="Тривимірна мохова долина. Прокручуйте, щоб розкрити кам’яний люк і спуститися в підземний тунель."></canvas>
+    <header class="site-header">
+      <span class="company-name">Verdant</span>
+      <button class="menu-button" type="button"><span>Menu</span><span class="menu-icon" aria-hidden="true"></span></button>
+    </header>
+    <main class="hero-copy" id="hero-copy">
+      <h1 class="hero-title" aria-label="On-prem that feels like the public cloud">
+        <span class="title-line" aria-hidden="true"><em>On-prem</em> THAT FEELS</span>
+        <span class="title-line" aria-hidden="true"><em>like the</em> <span class="title-word"><span class="script-initial">P</span>UBLIC</span> <span class="title-word"><span class="script-initial script-initial-c">C</span>LOUD</span></span>
+      </h1>
+      <p class="hero-description">Beyond the impact investigates the human cost of crowd-control weapons. Through<br />survivor stories, expert analysis, and visual investigations, we challenge official<br />narratives and reveal the lasting harm behind “less lethal” force.</p>
+    </main>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

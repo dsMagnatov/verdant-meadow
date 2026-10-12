@@ -1,6 +1,6 @@
 # Moss Valley
 
-A desktop WebGL scene: a luminous green and gold meadow, grouped moss-covered boulders, drifting pollen, wildflowers and a broad two-part stone hatch whose crack continues below the viewport. Scrolling opens the stone leaves and takes the camera underground into a mossy, vaulted rock corridor. The page contains a single fixed canvas and no interface or visible text.
+A desktop WebGL scene: a luminous green and gold meadow, grouped moss-covered boulders, drifting pollen, wildflowers and a broad two-part stone hatch whose crack continues below the viewport. Scrolling opens the stone leaves and takes the camera underground into a mossy, vaulted rock corridor. A fixed canvas sits behind the Verdant wordmark, a rectangular Menu button with a two-line icon and the owner-supplied two-line hero typography. Menu is a visual placeholder; no menu panel is implemented.
 
 ## Run
 
@@ -49,6 +49,8 @@ All foliage uses one screen-space hover light with a smooth, aspect-correct radi
 
 The supplied `public/assets/logo/logo.svg` becomes four beveled glass solids above the hatch. Frosted transmission blurs the meadow behind the logo, while clearer rounded edges catch the sun. Its anchor is at Y=3.6 (about 120 px above the first placement at the working desktop viewport). Rotation takes 36 seconds and stops under reduced motion; the logo stays at the surface when scrolling underground. Refraction uses a half-resolution capture, with finite HDR radiance before mip generation to protect bloom from invalid samples. The glass alone uses a generated reflection environment, so the established terrain/plant lighting is preserved.
 
-Upper-left sun shafts fan from the projected sun direction and share the existing shadowed atmospheric integration. They fade naturally during descent without adding another full-screen pass.
+Subtle upper-left sun shafts follow the projected glass-logo center and soften beyond it. They use the existing shadowed atmospheric integration and fade during descent without adding another full-screen pass.
+
+Hero copy follows the owner's `typogh.jpg` mockup. Instrument Serif supplies the regular and italic text, while Kapakana supplies the decorative P and C initials. Three self-hosted Latin WOFF2 files total about 60 KB. Copy fades and lifts slightly as the hatch opens, leaving the descent clear. The overlay lets pointer input reach the meadow; the Menu button keeps its own keyboard focus and hover states.
 
 Run `node scripts/check-journey.mjs` to check clearance before the camera crosses the ground, continuous forward orientation, reverse scrolling, frame-rate independent damping and reduced-motion behavior. Native scroll remains available with wheel, trackpad and keyboard. Reduced motion removes decorative wind/parallax and scroll damping while retaining the user-controlled journey.

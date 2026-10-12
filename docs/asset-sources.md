@@ -1,5 +1,17 @@
 # Reference assets for the meadow scene
 
+## Hero typography
+
+The project owner supplied `typogh.jpg`; its headline, paragraph and text placement are reproduced in the hero. The Verdant company name is a new placeholder chosen for this scene.
+
+Instrument Serif (regular and italic) and Kapakana (regular, decorative P/C initials) are self-hosted Latin WOFF2 subsets downloaded from the official Google Fonts stylesheet on 2026-10-12. Their SIL Open Font License files are included alongside them in `public/assets/fonts/`.
+
+- Instrument Serif source: https://github.com/google/fonts/tree/main/ofl/instrumentserif
+- Kapakana source: https://github.com/google/fonts/tree/main/ofl/kapakana
+- Regular Instrument Serif: https://fonts.gstatic.com/s/instrumentserif/v5/jizBRFtNs2ka5fXjeivQ4LroWlx-6zUTjg.woff2 (21,032 bytes).
+- Italic Instrument Serif: https://fonts.gstatic.com/s/instrumentserif/v5/jizHRFtNs2ka5fXjeivQ4LroWlx-6zAjjH7M.woff2 (22,128 bytes).
+- Kapakana: https://fonts.gstatic.com/s/kapakana/v19/sykt-yN0m6InS7OD9BCc9iYVO-6XOlDimtAJshzW.woff2 (18,064 bytes).
+
 ## Owner-provided logo
 
 The project owner supplied `logo.svg` in the workspace. Its four filled paths are copied unchanged to `public/assets/logo/logo.svg` and extruded at runtime with Three.js. The original SVG remains unchanged. The glass/reflection material is generated in code; no third-party logo or glass image was added.

@@ -22,6 +22,9 @@ import { groundHeight } from './math.js';
 import './style.css';
 
 const canvas = document.querySelector('#scene');
+const heroCopy = document.querySelector('#hero-copy');
+const logoLightTarget = new THREE.Vector3();
+let lastHeroOpacity=-1;
 const renderer = new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.6));
@@ -218,10 +221,10 @@ async function populate() {
   prepareRefractionBackground(scene);
   renderer.compile(scene,camera);
   assetsReady=true;
-  // Read-only diagnostics are exposed for browser QA; there is no on-screen UI.
+  // Read-only scene diagnostics are exposed for browser QA.
   window.sceneDiagnostics={ready:true,plants:vegetation.counts,hatchHalves:2,referenceAssets:true,interaction:'rooted rise, bend and warm glow',reducedMotion};
   canvas.dataset.ready='true';canvas.dataset.plants=JSON.stringify(vegetation.counts);
-  canvas.dataset.revision='glass-logo-sunrays-12';canvas.dataset.particles=String(pollen.points.geometry.attributes.position.count);
+  canvas.dataset.revision='typography-soft-rays-13';canvas.dataset.particles=String(pollen.points.geometry.attributes.position.count);
   canvas.dataset.logo=JSON.stringify(glassLogo.details);
   canvas.dataset.lighting='4096 sun shadows, contact occlusion, shadowed volumetric sunlight';
   canvas.dataset.composition='wide moss hatch, continuous crack';canvas.dataset.blur='broad lower corners and soft bottom center';
@@ -274,6 +277,13 @@ function render(now) {
   const elapsed=now-lastTime,dt=Math.min(elapsed/1000,.05);lastTime=now;
   if(!visible) return;
   const pose=journey.update(dt);
+  const heroOpacity=1-THREE.MathUtils.smoothstep(pose.progress,.015,.14);
+  if(heroOpacity!==lastHeroOpacity) {
+    heroCopy.style.opacity=heroOpacity.toFixed(3);
+    heroCopy.style.transform=`translateY(${((1-heroOpacity)*-26).toFixed(2)}px)`;
+    heroCopy.style.visibility=heroOpacity===0?'hidden':'visible';
+    lastHeroOpacity=heroOpacity;
+  }
   if(hatchRig) {
     hatchRig.left.position.x=-pose.openingDistance;
     hatchRig.right.position.x=pose.openingDistance;
@@ -290,6 +300,7 @@ function render(now) {
   fill.intensity=THREE.MathUtils.lerp(.12,.055,interior);
   ambient.intensity=THREE.MathUtils.lerp(.025,.018,interior);
   atmosphere.uniforms.scatterStrength.value=.48*(1-interior*.93);
+  atmosphere.uniforms.beamStrength.value=1.15*(1-THREE.MathUtils.smoothstep(pose.progress,.10,.30));
   // Follow the visible opening with the shadow volume. The sun direction stays
   // fixed; the cave roof must still block sunlight at the far end of the tunnel.
   const shadowFocus=THREE.MathUtils.smoothstep(pose.progress,.12,.45);
@@ -310,7 +321,8 @@ function render(now) {
   }
   atmosphere.uniforms.tDepth.value=composer.readBuffer.depthTexture;
   glassLogo?.update(uniforms.time.value,pose.progress);
-  atmosphere.updateLight();
+  if(glassLogo)glassLogo.group.getWorldPosition(logoLightTarget);
+  atmosphere.updateLight(glassLogo?logoLightTarget:undefined);
   renderer.info.reset();composer.render();
   if(assetsReady) {
     const d=window.sceneDiagnostics;
