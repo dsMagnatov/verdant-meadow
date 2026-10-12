@@ -48,7 +48,8 @@ export function createEnvironment(scene) {
         float sunlight=max(0.,dot(d,sunDirection));
         // Broad off-frame light without an obvious sun disc.
         col+=vec3(.60,.66,.16)*pow(sunlight,12.)*(.25+smoothstep(.05,.20,h));
-        float horizonGlow=exp(-pow((h-.006)*13.,2.));
+        float horizonDelta=(h-.006)*13.;
+        float horizonGlow=exp(-horizonDelta*horizonDelta);
         col+=vec3(.34,.36,.10)*horizonGlow;
         vec2 cloudUv=vec2(atan(d.x,-d.z)*2.2,h*8.);
         float clouds=skyFbm(cloudUv+vec2(5.7,2.));

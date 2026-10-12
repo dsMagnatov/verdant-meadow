@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { MeshoptSimplifier } from 'meshoptimizer';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -13,6 +14,7 @@ import { createAtmospherePass, createForegroundBlurPass } from './postprocessing
 import { createEnvironment, scatterRocks, createDust } from './environment.js';
 import { createVegetation } from './vegetation.js';
 import { createHatch, hatchContains, hatchHeight } from './hatch.js';
+import { createGlassLogo, prepareRefractionBackground } from './glass-logo.js';
 import { createUnderground, openingContains } from './underground.js';
 import { createUndergroundVegetation } from './underground-vegetation.js';
 import { createScrollJourney } from './scroll-journey.js';
@@ -28,6 +30,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.02;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.transmissionResolutionScale=.5;
 renderer.info.autoReset=false;
 renderer.setClearColor(0x716f58);
 
@@ -75,7 +78,7 @@ cavePollen.group.visible=false;
 const surfaceFogColor=new THREE.Color(0xc5ce89), caveFogColor=new THREE.Color(0x102326);
 const journey=createScrollJourney({heightMultiplier:5,reducedMotion:window.matchMedia('(prefers-reduced-motion: reduce)').matches});
 const pointerSurfaces=[environment.ground];
-let hatchRig=null, underground=null, caveVegetation=null, grassField=null;
+let hatchRig=null, underground=null, caveVegetation=null, grassField=null, glassLogo=null;
 
 // Remove the ground itself beneath the opening, so the camera crosses a real
 // aperture rather than disappearing through a solid heightfield.
@@ -164,7 +167,7 @@ function enhanceStone(material) {
 }
 
 async function populate() {
-  const [rockMap,rockNormal,rockRough,fernMap,fernNormal,fernAO,atlas,rockModel,foliage,stoneMap,stoneNormal,stoneRough] = await Promise.all([
+  const [rockMap,rockNormal,rockRough,fernMap,fernNormal,fernAO,atlas,rockModel,foliage,stoneMap,stoneNormal,stoneRough,logoSvg] = await Promise.all([
     loadTexture('otherlife-rocks-diffuse-2048.ktx2',true),
     loadTexture('otherlife-rocks-normal-2048.ktx2'),
     loadTexture('otherlife-rocks-roughness-2048.ktx2'),
@@ -177,6 +180,7 @@ async function populate() {
     textureLoader.loadAsync('/assets/stone/rock_face_03_diff_1k.jpg'),
     textureLoader.loadAsync('/assets/stone/rock_face_03_nor_gl_1k.jpg'),
     textureLoader.loadAsync('/assets/stone/rock_face_03_rough_1k.jpg'),
+    new SVGLoader().loadAsync('/assets/logo/logo.svg'),
   ]);
   fernMap.flipY=false; fernNormal.flipY=false; fernAO.flipY=false;
   rockMap.flipY=false;rockNormal.flipY=false;rockRough.flipY=false;
@@ -198,6 +202,8 @@ async function populate() {
   const hatchMaterial=enhanceStone(new THREE.MeshStandardMaterial({map:stoneMap,normalMap:stoneNormal,roughnessMap:stoneRough,roughness:.95,normalScale:new THREE.Vector2(.85,.85),color:0xdddbd3}));
   const hatch=createHatch(hatchMaterial);scene.add(hatch.group);
   hatchRig=hatch;
+  glassLogo=createGlassLogo({parent:hatch.logoAnchor,renderer,svg:logoSvg,sky:environment.sky,
+    startTime:uniforms.time.value,reducedMotion});
   pointerSurfaces.push(hatch.left.children[0],hatch.right.children[0]);
   const fernMesh=foliage.scene.getObjectByName('_9857_Var3_LOD0');
   if(!fernMesh?.isMesh) throw new Error('Fern geometry is missing');
@@ -209,12 +215,14 @@ async function populate() {
   underground=createUnderground({scene,stoneMaterial:caveStone,mossMap:environment.terrainMaterial.map});
   caveVegetation=createUndergroundVegetation({scene,fernGeometry,fernMaterial,atlas,uniforms,rootSamples:underground.rootSamples});
   pointerSurfaces.push(...(underground.pointerSurfaces||[]));
+  prepareRefractionBackground(scene);
   renderer.compile(scene,camera);
   assetsReady=true;
   // Read-only diagnostics are exposed for browser QA; there is no on-screen UI.
   window.sceneDiagnostics={ready:true,plants:vegetation.counts,hatchHalves:2,referenceAssets:true,interaction:'rooted rise, bend and warm glow',reducedMotion};
   canvas.dataset.ready='true';canvas.dataset.plants=JSON.stringify(vegetation.counts);
-  canvas.dataset.revision='single-halo-defocus-11';canvas.dataset.particles=String(pollen.points.geometry.attributes.position.count);
+  canvas.dataset.revision='glass-logo-sunrays-12';canvas.dataset.particles=String(pollen.points.geometry.attributes.position.count);
+  canvas.dataset.logo=JSON.stringify(glassLogo.details);
   canvas.dataset.lighting='4096 sun shadows, contact occlusion, shadowed volumetric sunlight';
   canvas.dataset.composition='wide moss hatch, continuous crack';canvas.dataset.blur='broad lower corners and soft bottom center';
   canvas.dataset.hoverLight='single screen circle, radius 22.5% of viewport height';
@@ -301,6 +309,7 @@ function render(now) {
     cavePollen.update(uniforms.time.value,camera);
   }
   atmosphere.uniforms.tDepth.value=composer.readBuffer.depthTexture;
+  glassLogo?.update(uniforms.time.value,pose.progress);
   atmosphere.updateLight();
   renderer.info.reset();composer.render();
   if(assetsReady) {
@@ -318,6 +327,7 @@ function render(now) {
     canvas.dataset.phase=pose.phase;
     canvas.dataset.camera=JSON.stringify(camera.position.toArray().map(v=>Number(v.toFixed(3))));
     canvas.dataset.leaves=JSON.stringify([hatchRig.left.position.x,hatchRig.right.position.x].map(v=>Number(v.toFixed(3))));
+    if(glassLogo){canvas.dataset.logoAngle=glassLogo.group.rotation.y.toFixed(3);canvas.dataset.logoVisible=String(glassLogo.group.visible);}
     if(grassField?.stats)canvas.dataset.grass=JSON.stringify(grassField.stats);
     averageFrameMs=THREE.MathUtils.lerp(averageFrameMs,elapsed,.035);
     canvas.dataset.fps=String(Math.round(1000/Math.max(1,averageFrameMs)));

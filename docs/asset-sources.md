@@ -1,5 +1,9 @@
 # Reference assets for the meadow scene
 
+## Owner-provided logo
+
+The project owner supplied `logo.svg` in the workspace. Its four filled paths are copied unchanged to `public/assets/logo/logo.svg` and extruded at runtime with Three.js. The original SVG remains unchanged. The glass/reflection material is generated in code; no third-party logo or glass image was added.
+
 Downloaded on 2026-10-12 for the user-requested local desktop scene. The files below are public assets delivered by the reference websites. Public delivery is not evidence of an open-source license; no reusable asset license or source repository was found in the inspected homepage HTML and JavaScript. This prototype records their provenance and does not publish the site.
 
 All downloaded files live in `public/assets/reference/`. Total: **11,799,374 bytes (11.25 MiB)**.

@@ -18,6 +18,7 @@ Build with `pnpm build`, then serve the `dist` directory (`pnpm preview`). Requi
 - `src/vegetation.js`: instanced foliage and vertex/fragment shader interaction.
 - `src/dense-grass.js`: fine opaque grass blades, spatial tiles, distance detail levels, coherent wind and rooted cursor parting.
 - `src/hatch.js`: two independent stone leaves, crack, logo anchor and descent target.
+- `src/glass-logo.js`: the supplied SVG extruded into frosted glass, local reflections and slow vertical-axis rotation.
 - `src/scroll-journey.js`: a reversible five-viewport scroll journey, smoothed progress and continuous camera keyframes.
 - `src/underground.js`: the real terrain aperture, shaft walls, ledges, arched tunnel and interior lights.
 - `src/underground-vegetation.js`: rooted growth, hanging vines and cursor-responsive cave foliage.
@@ -26,7 +27,7 @@ Build with `pnpm build`, then serve the `dist` directory (`pnpm preview`). Requi
 - `src/contact-occlusion.js`: depth-based local occlusion shared with the atmosphere shader.
 - `src/math.js`: deterministic noise, scatter and shared terrain height.
 
-The hatch leaves slide 3.3 meters in opposite directions before the camera crosses the ground. Their foliage stays attached. The terrain has an actual opening, and the camera descends to Y=-11.4 meters with a forward view into the central tunnel. Scrolling back reverses the same poses and plant growth. `logoAnchor` remains reserved above the hatch. The rig is available in `window.sceneRig` during development.
+The hatch leaves slide 3.3 meters in opposite directions before the camera crosses the ground. Their foliage stays attached. The terrain has an actual opening, and the camera descends to Y=-11.4 meters with a forward view into the central tunnel. Scrolling back reverses the same poses and plant growth. `logoAnchor` holds the rotating glass emblem above the hatch. The rig is available in `window.sceneRig` during development.
 
 Texture and model sources are recorded in `docs/asset-sources.md`. All runtime assets and Draco/Basis decoders are served locally. No external asset requests are required after the page loads.
 
@@ -45,5 +46,9 @@ The left foreground clearing overrides the exposed-stone grass mask and adds bot
 The right foreground uses the same dense grass layers with its own irregular edge and up to 64% shrub thinning. Separate random sequences preserve the established left clearing. Grass hover light follows the fern's warm green/yellow tint, brightening the blade tips while keeping the roots darker.
 
 All foliage uses one screen-space hover light with a smooth, aspect-correct radius of 22.5% of the viewport height. Lighting no longer combines the separate surface/ray proximity fields of tall and short plant layers; those fields still drive rooted motion and matching shadows. The larger foreground blur runs after atmosphere and bloom, so contact shadows soften with the image. A prefiltered quarter-resolution image receives a separable Gaussian blur, then blends across the lower corners and bottom center while leaving the central composition sharp. The small depth-free blur buffers avoid depth feedback and resize with the framebuffer.
+
+The supplied `public/assets/logo/logo.svg` becomes four beveled glass solids above the hatch. Frosted transmission blurs the meadow behind the logo, while clearer rounded edges catch the sun. Its anchor is at Y=3.6 (about 120 px above the first placement at the working desktop viewport). Rotation takes 36 seconds and stops under reduced motion; the logo stays at the surface when scrolling underground. Refraction uses a half-resolution capture, with finite HDR radiance before mip generation to protect bloom from invalid samples. The glass alone uses a generated reflection environment, so the established terrain/plant lighting is preserved.
+
+Upper-left sun shafts fan from the projected sun direction and share the existing shadowed atmospheric integration. They fade naturally during descent without adding another full-screen pass.
 
 Run `node scripts/check-journey.mjs` to check clearance before the camera crosses the ground, continuous forward orientation, reverse scrolling, frame-rate independent damping and reduced-motion behavior. Native scroll remains available with wheel, trackpad and keyboard. Reduced motion removes decorative wind/parallax and scroll damping while retaining the user-controlled journey.

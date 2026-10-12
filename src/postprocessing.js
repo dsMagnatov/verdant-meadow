@@ -16,6 +16,8 @@ export function createAtmospherePass(composer, camera, sun) {
       sunShadowMap: { value: clearShadow }, sunShadowMatrix: { value: sun.shadow.matrix },
       cameraWorld: { value: camera.matrixWorld },
       lightToSun: { value: new THREE.Vector3() },
+      sunScreen: { value: new THREE.Vector2(-.08,1.22) }, rayAspect: { value: camera.aspect },
+      beamStrength: { value: 3.8 },
       airDensity: { value: .007 }, scatterStrength: { value: .48 },
       ...createContactOcclusionUniforms(camera),
     },
@@ -25,6 +27,8 @@ export function createAtmospherePass(composer, camera, sun) {
       #include <packing>
       uniform sampler2D tDiffuse,tDepth,sunShadowMap;
       uniform float airDensity,scatterStrength;
+      uniform vec2 sunScreen;
+      uniform float rayAspect,beamStrength;
       uniform mat4 sunShadowMatrix,cameraWorld;
       uniform vec3 lightToSun;
       varying vec2 vUv;
@@ -36,6 +40,14 @@ export function createAtmospherePass(composer, camera, sun) {
         if(any(lessThan(shadow,vec3(0.))) || any(greaterThan(shadow,vec3(1.)))) return 1.;
         float storedDepth=unpackRGBAToDepth(texture2D(sunShadowMap,shadow.xy));
         return smoothstep(shadow.z-.0012,shadow.z+.0012,storedDepth);
+      }
+
+      float visibleSunBeams(vec2 uv) {
+        vec2 delta=(uv-sunScreen)*vec2(rayAspect,1.);
+        float angle=atan(delta.x,-delta.y);
+        vec4 beamDelta=(angle-vec4(.36,.55,.76,.96))/vec4(.024,.035,.021,.043);
+        float beams=dot(exp(-beamDelta*beamDelta),vec4(1.,.8,.65,.50));
+        return beams*exp(-length(delta)*.45);
       }
 
       vec3 scatteredSunlight(vec2 uv) {
@@ -55,7 +67,8 @@ export function createAtmospherePass(composer, camera, sun) {
           scattered+=sunlightAt(samplePosition)*density*stepLength*exp(-airDensity*distanceAlongRay);
         }
         float forwardGlow=.55+.9*pow(max(dot(ray,lightToSun),0.),5.);
-        return vec3(1.,.82,.43)*scattered*scatterStrength*forwardGlow;
+        float shafts=visibleSunBeams(uv)*beamStrength;
+        return vec3(1.,.82,.43)*scattered*scatterStrength*(forwardGlow+shafts);
       }
       void main(){
         vec4 color=texture2D(tDiffuse,vUv);
@@ -74,9 +87,13 @@ export function createAtmospherePass(composer, camera, sun) {
   pass.material.depthTest = false;
   pass.material.depthWrite = false;
   pass.setSize = (width, height) => pass.uniforms.aoResolution.value.set(width, height);
+  const sunProjection=new THREE.Vector3();
   pass.updateLight = () => {
     pass.uniforms.sunShadowMap.value = sun.shadow.map?.texture || clearShadow;
     pass.uniforms.lightToSun.value.subVectors(sun.position, sun.target.position).normalize();
+    sunProjection.copy(camera.position).addScaledVector(pass.uniforms.lightToSun.value,80).project(camera);
+    pass.uniforms.sunScreen.value.set(sunProjection.x*.5+.5,sunProjection.y*.5+.5);
+    pass.uniforms.rayAspect.value=camera.aspect;
   };
   pass.setSize(composer.renderTarget1.width, composer.renderTarget1.height);
   return pass;
