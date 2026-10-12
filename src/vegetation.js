@@ -10,7 +10,7 @@ function outsideHatch(x, z, padding = 0) {
 
 // Each plant shares one interaction value, so roots remain anchored and the
 // textured fronds move as a coherent rosette instead of stretching individually.
-function addPlantMotion(material, uniforms, {
+export function addPlantMotion(material, uniforms, {
   emission = 1.35, breeze = 1, diffuseBoost = 1, baseEmission = 0, heightRange = 1,
 } = {}) {
   material.userData.plantMotion = { breeze, heightRange };
@@ -49,7 +49,7 @@ function addPlantMotion(material, uniforms, {
          plantAxisZ = normalize((modelMatrix * vec4(instanceMatrix[2].xyz, 0.0)).xyz);
        #endif
        vec2 pointerDelta = plantAnchor.xz - uPlantPointer.xz;
-       float pointerDistance = length(pointerDelta);
+       float pointerDistance = distance(plantAnchor, uPlantPointer);
        float surfaceHover = (1.0 - smoothstep(0.15, 1.25, pointerDistance)) * uPlantPointerActive;
        vec3 plantProbe = plantAnchor + plantScaledYAxis * (0.40 * ${heightRange.toFixed(3)});
        float rayT = dot(plantProbe - uPlantRayOrigin, uPlantRayDirection);
@@ -106,7 +106,7 @@ function addPlantMotion(material, uniforms, {
   return material;
 }
 
-function makeCrossedHerbGeometry(column, atlasRow = 5) {
+export function makeCrossedHerbGeometry(column, atlasRow = 5) {
   const positions = [];
   const normals = [];
   const uvs = [];
@@ -234,7 +234,7 @@ function makeMossRosette() {
 }
 
 export function createVegetation({
-  scene, fernGeometry, fernMaterial, atlas, groundHeight, uniforms, hatch, rockSamples = [],
+  scene, fernGeometry, fernMaterial, atlas, groundHeight, uniforms, hatch, rockSamples = [], terrainHoleContains,
 }) {
   const group = new THREE.Group();
   group.name = 'living-meadow';
@@ -282,7 +282,7 @@ export function createVegetation({
 
   function plantAllowed(x, z, padding = 0) {
     if (!hasHatchSurface) return outsideHatch(x, z, padding);
-    if (!hatch.contains(x, z)) return true;
+    if (!hatch.contains(x, z)) return !terrainHoleContains?.(x,z);
     if (Math.abs(x) < 0.17 + padding) return false;
     // Shared slow noise creates coherent stone clearings across all species.
     // Plants on their edges soften the boundaries, leaving roughly a third of
