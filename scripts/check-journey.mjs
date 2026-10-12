@@ -3,6 +3,7 @@ import {
   createJourneyPose,
   createScrollJourney,
   getJourneyPose,
+  DESCENT_END,
 } from '../src/scroll-journey.js';
 
 const EPSILON = 1e-10;
@@ -29,8 +30,8 @@ const end = getJourneyPose(1);
 assert.equal(end.opening, 1, 'The hatch remains fully open underground');
 assert.equal(end.openingDistance, 3.3, 'Each leaf reaches the required shaft clearance');
 assert.equal(end.depthProgress, 1);
-vectorEqual(end.position, [0, -11.4, 1.8], 'Final underground camera');
-vectorEqual(end.target, [0, -11.3, -20], 'Final corridor view');
+vectorEqual(end.position, [0, -11.65, -30], 'Final underground camera');
+vectorEqual(end.target, [0, -11.55, -42], 'Final corridor view');
 
 const sampledPose = createJourneyPose();
 let previousY = Infinity, previousOpening = -1, previousDepth = -1;
@@ -52,7 +53,8 @@ for (let index = 0; index <= 10000; index++) {
   if (position.y <= .6) assert.equal(opening, 1, 'The slab must clear before the camera reaches its surface');
   if (position.y <= 0) {
     firstGroundCrossing ??= progress;
-    assert.ok(position.z > -5.15 && position.z < 10.45, 'The descent stays inside the shaft longitudinal bounds');
+    if (progress <= DESCENT_END) assert.ok(position.z > -5.15 && position.z < 10.45, 'The descent stays inside the shaft longitudinal bounds');
+    else assert.ok(position.z > -35.8 && position.z < 2, 'The forward journey stays inside the corridor');
     assert.ok(position.y > -13.8, 'The underground camera stays above the floor');
   }
 
@@ -72,6 +74,10 @@ assert.notEqual(firstGroundCrossing, null, 'The journey reaches the underground 
 // A backward scroll must retrace the same observable camera/hatch poses.
 const checkpoints = [0, .05, .10, .20, .28, .42, .50, .65, .85, 1];
 const forwardPoses = checkpoints.map(progress => snapshot(getJourneyPose(progress, sampledPose)));
+const descentEnd = getJourneyPose(DESCENT_END);
+vectorEqual(descentEnd.position, [0, -11.4, 1.8], 'The original descent joins the corridor without a position jump');
+assert.equal(descentEnd.descentProgress, 1);
+assert.ok(getJourneyPose(.6).position.z > getJourneyPose(.8).position.z, 'Forward scrolling moves the camera down the corridor');
 for (let index = checkpoints.length - 1; index >= 0; index--) {
   const pose = getJourneyPose(checkpoints[index], sampledPose);
   const expected = forwardPoses[index];

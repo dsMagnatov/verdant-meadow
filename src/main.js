@@ -17,13 +17,15 @@ import { createHatch, hatchContains, hatchHeight } from './hatch.js';
 import { createGlassLogo, prepareRefractionBackground } from './glass-logo.js';
 import { createUnderground, openingContains } from './underground.js';
 import { createUndergroundVegetation } from './underground-vegetation.js';
-import { createScrollJourney } from './scroll-journey.js';
+import { createScrollJourney, JOURNEY_SCROLL_VIEWPORTS } from './scroll-journey.js';
 import { groundHeight } from './math.js';
 import { createMenu } from './menu.js';
+import { createTunnelStory } from './tunnel-story.js';
+import { createFinaleGarden } from './finale-garden.js';
 import './style.css';
 
 const canvas = document.querySelector('#scene');
-const navigation = createMenu({ scrollViewports: 5 });
+const navigation = createMenu();
 const heroCopy = document.querySelector('#hero-copy');
 const logoLightTarget = new THREE.Vector3();
 let lastHeroOpacity=-1;
@@ -42,6 +44,7 @@ renderer.setClearColor(0x716f58);
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0xc5ce89, .014);
 const camera = new THREE.PerspectiveCamera(48, window.innerWidth/window.innerHeight,.1,400);
+scene.add(camera);
 const cameraHome = new THREE.Vector3(0, 3.4, 8.9);
 const lookHome = new THREE.Vector3(0, 2.25, -2.5);
 camera.position.copy(cameraHome); camera.lookAt(lookHome);
@@ -77,13 +80,14 @@ const pollen=createDust(scene);
 const cavePollen=createDust(scene);
 cavePollen.group.name='Slow pollen below the stone opening';
 cavePollen.group.position.y=-13.4;
+cavePollen.group.position.z=-14;
 cavePollen.group.scale.x=.18;
 cavePollen.points.geometry.setDrawRange(0,320);
 cavePollen.group.visible=false;
 const surfaceFogColor=new THREE.Color(0xc5ce89), caveFogColor=new THREE.Color(0x102326);
-const journey=createScrollJourney({heightMultiplier:5,reducedMotion:window.matchMedia('(prefers-reduced-motion: reduce)').matches});
+const journey=createScrollJourney({heightMultiplier:JOURNEY_SCROLL_VIEWPORTS,reducedMotion:window.matchMedia('(prefers-reduced-motion: reduce)').matches});
 const pointerSurfaces=[environment.ground];
-let hatchRig=null, underground=null, caveVegetation=null, grassField=null, glassLogo=null;
+let hatchRig=null, underground=null, caveVegetation=null, grassField=null, glassLogo=null, finaleGarden=null;
 
 // Remove the ground itself beneath the opening, so the camera crosses a real
 // aperture rather than disappearing through a solid heightfield.
@@ -110,6 +114,7 @@ const pointer=new THREE.Vector2(0,0), smoothPointer=new THREE.Vector2(0,0);
 const targetWorld=new THREE.Vector3(1000,0,1000), raycaster=new THREE.Raycaster();
 let pointerInside=false, pointerPresence=0, visible=true, assetsReady=false, lastTime=performance.now(),averageFrameMs=16.7;
 const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const tunnelStory=createTunnelStory({reducedMotion});
 
 function sceneSurfaceHeight(x,z) {
   const terrain=groundHeight(x,z);
@@ -213,6 +218,7 @@ async function populate() {
   const fernMesh=foliage.scene.getObjectByName('_9857_Var3_LOD0');
   if(!fernMesh?.isMesh) throw new Error('Fern geometry is missing');
   const fernGeometry=normalizedGeometry(fernMesh);
+  finaleGarden=createFinaleGarden({camera,fernGeometry,fernMap,atlas,time:uniforms.time,reducedMotion});
   const fernMaterial=new THREE.MeshStandardMaterial({map:fernMap,alphaMap:fernMap,alphaTest:.045,normalMap:fernNormal,aoMap:fernAO,aoMapIntensity:.15,color:0xe2f0bc,roughness:.88,side:THREE.DoubleSide,normalScale:new THREE.Vector2(.25,.25)});
   const vegetation=createVegetation({scene,fernGeometry,fernMaterial,atlas,groundHeight:sceneSurfaceHeight,uniforms,hatch,rockSamples:landscapeRocks.surfaceSamples,terrainHoleContains:openingContains});
   grassField=vegetation.grassField;
@@ -226,7 +232,8 @@ async function populate() {
   // Read-only scene diagnostics are exposed for browser QA.
   window.sceneDiagnostics={ready:true,plants:vegetation.counts,hatchHalves:2,referenceAssets:true,interaction:'rooted rise, bend and warm glow',reducedMotion};
   canvas.dataset.ready='true';canvas.dataset.plants=JSON.stringify(vegetation.counts);
-  canvas.dataset.revision='sun-rays-plus15-15';canvas.dataset.particles=String(pollen.points.geometry.attributes.position.count);
+  canvas.dataset.revision='tunnel-story-tilt-garden-16';canvas.dataset.particles=String(pollen.points.geometry.attributes.position.count);
+  canvas.dataset.finalePlants=String(finaleGarden.count);
   canvas.dataset.logo=JSON.stringify(glassLogo.details);
   canvas.dataset.lighting='4096 sun shadows, contact occlusion, shadowed volumetric sunlight';
   canvas.dataset.composition='wide moss hatch, continuous crack';canvas.dataset.blur='broad lower corners and soft bottom center';
@@ -247,6 +254,7 @@ window.addEventListener('blur',()=>{pointerInside=false;});
 document.addEventListener('visibilitychange',()=>{visible=!document.hidden;lastTime=performance.now();});
 window.addEventListener('resize',()=>{
   camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();
+  finaleGarden?.resize();
   renderer.setSize(window.innerWidth,window.innerHeight);composer.setSize(window.innerWidth,window.innerHeight);
   uniforms.renderResolution.value.set(composer.renderTarget1.width,composer.renderTarget1.height);
   antialiasing.uniforms.resolution.value.set(1/composer.renderTarget1.width,1/composer.renderTarget1.height);
@@ -280,7 +288,9 @@ function render(now) {
   const elapsed=now-lastTime,dt=Math.min(elapsed/1000,.05);lastTime=now;
   if(!visible) return;
   const pose=journey.update(dt);
-  const heroOpacity=1-THREE.MathUtils.smoothstep(pose.progress,.015,.14);
+  const narrative=tunnelStory.update(pose.progress,dt,navigation.isOpen);
+  finaleGarden?.setProgress(narrative.finale);
+  const heroOpacity=1-THREE.MathUtils.smoothstep(pose.descentProgress,.015,.14);
   if(heroOpacity!==lastHeroOpacity) {
     heroCopy.style.opacity=heroOpacity.toFixed(3);
     heroCopy.style.transform=`translateY(${((1-heroOpacity)*-26).toFixed(2)}px)`;
@@ -303,10 +313,10 @@ function render(now) {
   fill.intensity=THREE.MathUtils.lerp(.12,.055,interior);
   ambient.intensity=THREE.MathUtils.lerp(.025,.018,interior);
   atmosphere.uniforms.scatterStrength.value=.48*(1-interior*.93);
-  atmosphere.uniforms.beamStrength.value=1.3225*(1-THREE.MathUtils.smoothstep(pose.progress,.10,.30));
+  atmosphere.uniforms.beamStrength.value=1.3225*(1-THREE.MathUtils.smoothstep(pose.descentProgress,.10,.30));
   // Follow the visible opening with the shadow volume. The sun direction stays
   // fixed; the cave roof must still block sunlight at the far end of the tunnel.
-  const shadowFocus=THREE.MathUtils.smoothstep(pose.progress,.12,.45);
+  const shadowFocus=THREE.MathUtils.smoothstep(pose.descentProgress,.12,.45);
   sun.target.position.set(0,-6*shadowFocus,-3-10*shadowFocus);
   sun.position.copy(environment.sunlightDirection).multiplyScalar(36).add(sun.target.position);
   const influence=reducedMotion?0:pointerPresence;
@@ -323,7 +333,7 @@ function render(now) {
     cavePollen.update(uniforms.time.value,camera);
   }
   atmosphere.uniforms.tDepth.value=composer.readBuffer.depthTexture;
-  glassLogo?.update(uniforms.time.value,pose.progress);
+  glassLogo?.update(uniforms.time.value,pose.descentProgress);
   if(glassLogo)glassLogo.group.getWorldPosition(logoLightTarget);
   atmosphere.updateLight(glassLogo?logoLightTarget:undefined);
   renderer.info.reset();composer.render();
@@ -338,6 +348,9 @@ function render(now) {
     canvas.dataset.pointerPresence=String(Number(pointerPresence.toFixed(3)));
     canvas.dataset.drawCalls=String(d.drawCalls);canvas.dataset.triangles=String(d.triangles);
     canvas.dataset.scrollProgress=pose.progress.toFixed(4);
+    canvas.dataset.descentProgress=pose.descentProgress.toFixed(4);
+    canvas.dataset.storyCard=narrative.activeCard;
+    canvas.dataset.finale=String(narrative.finale);
     canvas.dataset.opening=pose.opening.toFixed(4);
     canvas.dataset.phase=pose.phase;
     canvas.dataset.camera=JSON.stringify(camera.position.toArray().map(v=>Number(v.toFixed(3))));

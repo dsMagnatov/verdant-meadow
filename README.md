@@ -20,7 +20,9 @@ Build with `pnpm build`, then serve the `dist` directory (`pnpm preview`). Requi
 - `src/dense-grass.js`: fine opaque grass blades, spatial tiles, distance detail levels, coherent wind and rooted cursor parting.
 - `src/hatch.js`: two independent stone leaves, crack, logo anchor and descent target.
 - `src/glass-logo.js`: the supplied SVG extruded into frosted glass, local reflections and slow vertical-axis rotation.
-- `src/scroll-journey.js`: a reversible five-viewport scroll journey, smoothed progress and continuous camera keyframes.
+- `src/scroll-journey.js`: a reversible twelve-viewport journey, with five viewports for descent and seven for the forward corridor passage and finale.
+- `src/tunnel-story.js`: three sequential frosted tiles, reversible blur/opacity transitions and the final comparison reveal.
+- `src/finale-garden.js`: camera-framed ferns and leafy stems around the final screen, reusing the meadow geometry and atlas with slow rooted wind.
 - `src/underground.js`: the real terrain aperture, shaft walls, ledges, arched tunnel and interior lights.
 - `src/underground-vegetation.js`: rooted growth, hanging vines and cursor-responsive cave foliage.
 - `src/postprocessing.js`: shadow-map ray marching through sunlit air, contact occlusion and soft foreground blur across the lower corners and bottom center.
@@ -28,7 +30,7 @@ Build with `pnpm build`, then serve the `dist` directory (`pnpm preview`). Requi
 - `src/contact-occlusion.js`: depth-based local occlusion shared with the atmosphere shader.
 - `src/math.js`: deterministic noise, scatter and shared terrain height.
 
-The hatch leaves slide 3.3 meters in opposite directions before the camera crosses the ground. Their foliage stays attached. The terrain has an actual opening, and the camera descends to Y=-11.4 meters with a forward view into the central tunnel. Scrolling back reverses the same poses and plant growth. `logoAnchor` holds the rotating glass emblem above the hatch. The rig is available in `window.sceneRig` during development.
+The hatch leaves slide 3.3 meters in opposite directions before the camera crosses the ground. Their foliage stays attached. The terrain has an actual opening, and the camera descends to Y=-11.4 meters before moving forward from Z=1.8 to Z=-30 along the central tunnel. The original opening/descent keeps its five-viewport scroll distance. Scrolling back reverses the same poses, plant growth and content reveals. `logoAnchor` holds the rotating glass emblem above the hatch. The rig is available in `window.sceneRig` during development.
 
 Texture and model sources are recorded in `docs/asset-sources.md`. All runtime assets and Draco/Basis decoders are served locally. No external asset requests are required after the page loads.
 
@@ -55,3 +57,7 @@ Subtle upper-left sun shafts follow the projected glass-logo center and soften b
 Hero copy follows the owner's `typogh.jpg` mockup. Instrument Serif supplies the regular and italic text, while Kapakana supplies the decorative P and C initials. Three self-hosted Latin WOFF2 files total about 60 KB. Copy fades and lifts slightly as the hatch opens, leaving the descent clear. The overlay lets pointer input reach the meadow; the Menu button keeps its own keyboard focus and hover states.
 
 Run `node scripts/check-journey.mjs` to check clearance before the camera crosses the ground, continuous forward orientation, reverse scrolling, frame-rate independent damping and reduced-motion behavior. Native scroll remains available with wheel, trackpad and keyboard. Reduced motion removes decorative wind/parallax and scroll damping while retaining the user-controlled journey.
+
+Three frosted tiles describe control, simpler workflows and local growth. They appear individually at 5.2–6.8, 7.0–8.6 and 8.8–10.4 viewport scroll positions, with a reading plateau between blur-in and blur-out. White abstract icons are inline SVGs. The final black comparison screen fades in at 10.75–11.75 viewports and remains available at the document end. Verdant copy describes the proposed concept rather than a verified product specification; general deployment-model references are recorded in `docs/content-sources.md`. The owner requested a visual Let’s talk button with no destination for now.
+
+Visible story cards tilt smoothly by up to 7°/9° near the pointer and return to rest outside the card. The icon, heading and paragraph sit at separate shallow depths. Tilt stops while the menu is open and under reduced motion. The final screen has 24 fern/leafy plant instances at its side edges, in five batches, using existing local assets and the existing renderer. Slow wind only bends the tips; the black central comparison remains readable.

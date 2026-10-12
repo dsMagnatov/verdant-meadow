@@ -1,12 +1,14 @@
 import * as THREE from 'three';
 
 export const JOURNEY_OPEN_DISTANCE = 3.3;
-export const JOURNEY_SCROLL_VIEWPORTS = 5;
+export const DESCENT_SCROLL_VIEWPORTS = 5;
+export const JOURNEY_SCROLL_VIEWPORTS = 12;
+export const DESCENT_END = DESCENT_SCROLL_VIEWPORTS / JOURNEY_SCROLL_VIEWPORTS;
 
 // The camera stays above the stone until both leaves have reached full clearance.
 // Keeping the target ahead in -Z avoids the vertical lookAt singularity as the
 // descent turns into a view along the underground corridor.
-const KEYFRAMES = [
+const DESCENT_KEYFRAMES = [
   { p: 0, position: [0, 3.4, 8.9], target: [0, 2.25, -2.5] },
   { p: .10, position: [0, 3.4, 8.9], target: [0, 2.25, -2.5] },
   { p: .28, position: [0, 3.0, 5.5], target: [0, -.6, 2.2] },
@@ -14,6 +16,13 @@ const KEYFRAMES = [
   { p: .54, position: [0, -2.3, 2.6], target: [0, -5.3, -3.1] },
   { p: .70, position: [0, -6.2, 2.25], target: [0, -7.6, -10] },
   { p: 1, position: [0, -11.4, 1.8], target: [0, -11.3, -20] },
+];
+const KEYFRAMES = [
+  ...DESCENT_KEYFRAMES.map(key => ({ ...key, p: key.p * DESCENT_END })),
+  { p: 7 / 12, position: [0, -11.45, -7.8], target: [0, -11.35, -20.5] },
+  { p: 9 / 12, position: [0, -11.55, -17.4], target: [0, -11.45, -30] },
+  { p: 11 / 12, position: [0, -11.65, -28.8], target: [0, -11.55, -40] },
+  { p: 1, position: [0, -11.65, -30], target: [0, -11.55, -42] },
 ];
 
 function clampProgress(value) {
@@ -60,7 +69,7 @@ export function createJourneyPose() {
   return {
     position: new THREE.Vector3(0, 3.4, 8.9),
     target: new THREE.Vector3(0, 2.25, -2.5),
-    progress: 0, rawProgress: 0,
+    progress: 0, rawProgress: 0, descentProgress: 0,
     opening: 0, openingDistance: 0, depthProgress: 0, phase: 'meadow',
   };
 }
@@ -83,13 +92,15 @@ export function getJourneyPose(progress, pose = createJourneyPose()) {
     sampleAxis(targetAxes[2], segment, t, width),
   );
   pose.progress = pose.rawProgress = p;
-  pose.opening = smootherstep(p / .28);
+  pose.descentProgress = clampProgress(p / DESCENT_END);
+  pose.opening = smootherstep(pose.descentProgress / .28);
   pose.openingDistance = pose.opening * JOURNEY_OPEN_DISTANCE;
   pose.depthProgress = THREE.MathUtils.clamp(-pose.position.y / 11.4, 0, 1);
   pose.phase = p === 0 ? 'meadow'
-    : p < .28 ? 'opening'
+    : pose.descentProgress < .28 ? 'opening'
       : pose.position.y > .4 ? 'approach'
-        : pose.position.y > -6.2 ? 'descent' : 'underground';
+        : pose.position.y > -6.2 ? 'descent'
+          : p >= 11 / 12 ? 'finale' : 'underground';
   return pose;
 }
 
@@ -97,7 +108,7 @@ const browserScrollY = () => typeof window === 'undefined' ? 0 : window.scrollY;
 const browserViewportHeight = () => typeof window === 'undefined' ? 1 : window.innerHeight;
 
 /**
- * A 6-viewport document supplies the default 5-viewport native scroll range.
+ * A 13-viewport document supplies 5 viewports of descent, then the corridor.
  * Call update(dtSeconds) once per frame; the returned pose and
  * its Vector3s are reused. Resize reads the new viewport height automatically.
  * Reduced motion removes scroll damping while preserving the requested pose.

@@ -1,5 +1,5 @@
 /** Native modal focus handling, animated dismissal and the existing scroll journey. */
-export function createMenu({ scrollViewports = 5 } = {}) {
+export function createMenu() {
   const dialog = document.querySelector('#site-menu');
   const toggle = document.querySelector('#menu-toggle');
   const closeButton = dialog.querySelector('.menu-close');
@@ -8,7 +8,7 @@ export function createMenu({ scrollViewports = 5 } = {}) {
   // Real fragment targets also support opening a destination in a new tab.
   for (const link of dialog.querySelectorAll('.menu-link')) {
     const anchor = document.querySelector(link.getAttribute('href'));
-    anchor.style.top = `${Number(link.dataset.progress) * scrollViewports * 100}vh`;
+    anchor.style.top = `${Number(link.dataset.scroll) * 100}vh`;
   }
 
   function open() {
@@ -34,7 +34,7 @@ export function createMenu({ scrollViewports = 5 } = {}) {
     if (pendingProgress !== null) {
       const progress = pendingProgress;
       pendingProgress = null;
-      window.scrollTo({ top: progress * window.innerHeight * scrollViewports,
+      window.scrollTo({ top: progress * window.innerHeight,
         behavior: reducedMotion.matches ? 'instant' : 'smooth' });
     }
   }
@@ -56,7 +56,7 @@ export function createMenu({ scrollViewports = 5 } = {}) {
     const link = event.target.closest('.menu-link');
     if (link) {
       event.preventDefault();
-      close(Number(link.dataset.progress));
+      close(Number(link.dataset.scroll));
     } else if (event.target === dialog) close();
   });
   dialog.addEventListener('wheel', event => event.preventDefault(), { passive: false });
