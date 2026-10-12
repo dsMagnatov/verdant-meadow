@@ -17,7 +17,7 @@ export function createAtmospherePass(composer, camera, sun) {
       cameraWorld: { value: camera.matrixWorld },
       lightToSun: { value: new THREE.Vector3() },
       sunScreen: { value: new THREE.Vector2(-.08,1.22) }, rayAspect: { value: camera.aspect },
-      beamStrength: { value: 1.15 },
+      beamStrength: { value: 1.3225 },
       beamAngle: { value: .55 }, beamTarget: { value: new THREE.Vector2(.5,.64) },
       airDensity: { value: .007 }, scatterStrength: { value: .48 },
       ...createContactOcclusionUniforms(camera),

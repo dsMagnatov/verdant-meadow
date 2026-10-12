@@ -226,7 +226,7 @@ async function populate() {
   // Read-only scene diagnostics are exposed for browser QA.
   window.sceneDiagnostics={ready:true,plants:vegetation.counts,hatchHalves:2,referenceAssets:true,interaction:'rooted rise, bend and warm glow',reducedMotion};
   canvas.dataset.ready='true';canvas.dataset.plants=JSON.stringify(vegetation.counts);
-  canvas.dataset.revision='fullscreen-menu-14';canvas.dataset.particles=String(pollen.points.geometry.attributes.position.count);
+  canvas.dataset.revision='sun-rays-plus15-15';canvas.dataset.particles=String(pollen.points.geometry.attributes.position.count);
   canvas.dataset.logo=JSON.stringify(glassLogo.details);
   canvas.dataset.lighting='4096 sun shadows, contact occlusion, shadowed volumetric sunlight';
   canvas.dataset.composition='wide moss hatch, continuous crack';canvas.dataset.blur='broad lower corners and soft bottom center';
@@ -303,7 +303,7 @@ function render(now) {
   fill.intensity=THREE.MathUtils.lerp(.12,.055,interior);
   ambient.intensity=THREE.MathUtils.lerp(.025,.018,interior);
   atmosphere.uniforms.scatterStrength.value=.48*(1-interior*.93);
-  atmosphere.uniforms.beamStrength.value=1.15*(1-THREE.MathUtils.smoothstep(pose.progress,.10,.30));
+  atmosphere.uniforms.beamStrength.value=1.3225*(1-THREE.MathUtils.smoothstep(pose.progress,.10,.30));
   // Follow the visible opening with the shadow volume. The sun direction stays
   // fixed; the cave roof must still block sunlight at the far end of the tunnel.
   const shadowFocus=THREE.MathUtils.smoothstep(pose.progress,.12,.45);
