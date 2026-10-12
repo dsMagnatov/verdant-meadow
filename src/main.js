@@ -23,7 +23,7 @@ import { createMenu } from './menu.js';
 import { createTunnelStory } from './tunnel-story.js';
 import { createFinaleGarden } from './finale-garden.js';
 import { createViewport } from './responsive.js';
-import './style.css';
+import { preloader } from './preloader.js';
 
 const canvas = document.querySelector('#scene');
 const viewport = createViewport();
@@ -117,6 +117,7 @@ const uniforms={
 const pointer=new THREE.Vector2(0,0), smoothPointer=new THREE.Vector2(0,0);
 const targetWorld=new THREE.Vector3(1000,0,1000), raycaster=new THREE.Raycaster();
 let pointerInside=false, pointerPresence=0, visible=true, assetsReady=false, lastTime=performance.now(),averageFrameMs=16.7;
+let firstFrameRendered=false;
 const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const tunnelStory=createTunnelStory({reducedMotion});
 
@@ -131,7 +132,7 @@ const gltf = new GLTFLoader().setDRACOLoader(draco);
 const textureLoader=new THREE.TextureLoader();
 const assets='/assets/reference/';
 const loadTexture=async(name,color=false)=>{
-  const tex=await (name.endsWith('.ktx2')?ktx:textureLoader).loadAsync(assets+name);
+  const tex=await preloader.track(onProgress=>(name.endsWith('.ktx2')?ktx:textureLoader).loadAsync(assets+name,onProgress));
   if(color) tex.colorSpace=THREE.SRGBColorSpace;
   tex.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
   return tex;
@@ -181,6 +182,7 @@ function enhanceStone(material) {
 }
 
 async function populate() {
+  preloader.beginAssets(13);
   const [rockMap,rockNormal,rockRough,fernMap,fernNormal,fernAO,atlas,rockModel,foliage,stoneMap,stoneNormal,stoneRough,logoSvg] = await Promise.all([
     loadTexture('otherlife-rocks-diffuse-2048.ktx2',true),
     loadTexture('otherlife-rocks-normal-2048.ktx2'),
@@ -189,12 +191,12 @@ async function populate() {
     loadTexture('otherlife-ferns-normal-1024.ktx2'),
     loadTexture('otherlife-ferns-ao-1024.ktx2'),
     loadTexture('gladeye-pool-summer.png',true),
-    gltf.loadAsync(assets+'otherlife-large-rocks.glb'),
-    gltf.loadAsync(assets+'otherlife-foliage.glb'),
-    textureLoader.loadAsync('/assets/stone/rock_face_03_diff_1k.jpg'),
-    textureLoader.loadAsync('/assets/stone/rock_face_03_nor_gl_1k.jpg'),
-    textureLoader.loadAsync('/assets/stone/rock_face_03_rough_1k.jpg'),
-    new SVGLoader().loadAsync('/assets/logo/logo.svg'),
+    preloader.track(onProgress=>gltf.loadAsync(assets+'otherlife-large-rocks.glb',onProgress)),
+    preloader.track(onProgress=>gltf.loadAsync(assets+'otherlife-foliage.glb',onProgress)),
+    preloader.track(onProgress=>textureLoader.loadAsync('/assets/stone/rock_face_03_diff_1k.jpg',onProgress)),
+    preloader.track(onProgress=>textureLoader.loadAsync('/assets/stone/rock_face_03_nor_gl_1k.jpg',onProgress)),
+    preloader.track(onProgress=>textureLoader.loadAsync('/assets/stone/rock_face_03_rough_1k.jpg',onProgress)),
+    preloader.track(onProgress=>new SVGLoader().loadAsync('/assets/logo/logo.svg',onProgress)),
   ]);
   fernMap.flipY=false; fernNormal.flipY=false; fernAO.flipY=false;
   rockMap.flipY=false;rockNormal.flipY=false;rockRough.flipY=false;
@@ -231,12 +233,14 @@ async function populate() {
   caveVegetation=createUndergroundVegetation({scene,fernGeometry,fernMaterial,atlas,uniforms,rootSamples:underground.rootSamples});
   pointerSurfaces.push(...(underground.pointerSurfaces||[]));
   prepareRefractionBackground(scene);
-  renderer.compile(scene,camera);
+  preloader.mark('geometry');
+  await renderer.compileAsync(scene,camera);
+  preloader.mark('shaders');
   assetsReady=true;
   // Read-only scene diagnostics are exposed for browser QA.
   window.sceneDiagnostics={ready:true,plants:vegetation.counts,hatchHalves:2,referenceAssets:true,interaction:'rooted rise, bend and warm glow',reducedMotion};
   canvas.dataset.ready='true';canvas.dataset.plants=JSON.stringify(vegetation.counts);
-  canvas.dataset.revision='responsive-desktop-mobile-18';canvas.dataset.particles=String(pollen.points.geometry.attributes.position.count);
+  canvas.dataset.revision='animated-scene-preloader-19';canvas.dataset.particles=String(pollen.points.geometry.attributes.position.count);
   canvas.dataset.finalePlants=String(finaleGarden.count);
   canvas.dataset.logo=JSON.stringify(glassLogo.details);
   resizeScene();
@@ -253,7 +257,7 @@ function readPointer(event) {
   pointer.set(event.clientX/window.innerWidth*2-1,1-event.clientY/window.innerHeight*2);
   uniforms.pointerScreen.value.set(event.clientX/window.innerWidth,1-event.clientY/window.innerHeight);
   touchPointer=event.pointerType==='touch';
-  pointerInside=!navigation.isOpen;
+  pointerInside=!navigation.isOpen&&!preloader.blocking;
 }
 window.addEventListener('pointermove',readPointer,{passive:true});
 window.addEventListener('pointerdown',readPointer,{passive:true});
@@ -312,7 +316,7 @@ function updatePointer(dt) {
 function render(now) {
   requestAnimationFrame(render);
   const elapsed=now-lastTime,dt=Math.min(elapsed/1000,.05);lastTime=now;
-  if(!visible) return;
+  if(!visible||!assetsReady||preloader.failed) return;
   const pose=journey.update(dt);
   const narrative=tunnelStory.update(pose.progress,dt,navigation.isOpen);
   finaleGarden?.setProgress(narrative.finale);
@@ -364,6 +368,11 @@ function render(now) {
   if(glassLogo)glassLogo.group.getWorldPosition(logoLightTarget);
   atmosphere.updateLight(glassLogo?logoLightTarget:undefined);
   renderer.info.reset();composer.render();
+  if(!firstFrameRendered) {
+    firstFrameRendered=true;
+    canvas.dataset.firstFrame='true';
+    requestAnimationFrame(()=>preloader.mark('frame'));
+  }
   if(assetsReady) {
     const d=window.sceneDiagnostics;
     d.hover=Number(uniforms.pointerActive.value.toFixed(3));
@@ -389,4 +398,4 @@ function render(now) {
   }
 }
 requestAnimationFrame(render);
-populate().catch(error=>{console.error('Scene assets failed to initialize',error);window.sceneDiagnostics={ready:false,error:error.message};canvas.dataset.error=error.message;});
+populate().catch(error=>{console.error('Scene assets failed to initialize',error);window.sceneDiagnostics={ready:false,error:error.message};canvas.dataset.error=error.message;preloader.fail();});

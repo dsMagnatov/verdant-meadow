@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="is-loading">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -9,8 +9,26 @@
     <link rel="preload" href="/assets/fonts/instrument-serif-italic.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/assets/fonts/kapakana-regular.woff2" as="font" type="font/woff2" crossorigin />
     <title>Verdant</title>
+    <style>html.is-loading{overflow:hidden}html.is-loading #experience{visibility:hidden}.preloader{position:fixed;inset:0;z-index:100;display:grid;place-items:center;background:#101810;color:#f2f2de}</style>
   </head>
   <body>
+    <section class="preloader" id="preloader" aria-label="Loading Verdant" data-state="loading" data-progress="0">
+      <p class="visually-hidden" role="status">Loading the scene.</p>
+      <div class="preloader-content">
+        <div class="preloader-counter" aria-hidden="true">
+          <span class="preloader-digit"><span class="preloader-strip"><span>0</span></span></span>
+          <span class="preloader-digit"><span class="preloader-strip"><span>0</span></span></span>
+          <span class="preloader-digit"><span class="preloader-strip"><span>0</span></span></span>
+          <span class="preloader-percent">%</span>
+        </div>
+        <div class="preloader-progress" role="progressbar" aria-label="Scene loading progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span class="preloader-fill"></span></div>
+      </div>
+      <div class="preloader-error" hidden>
+        <p>The scene couldn’t load.</p>
+        <button class="preloader-retry" type="button">Try again</button>
+      </div>
+    </section>
+    <div id="experience" inert aria-hidden="true" aria-busy="true">
     <canvas id="scene" lang="uk" aria-label="Тривимірна мохова долина. Прокручуйте, щоб розкрити кам’яний люк і спуститися в підземний тунель."></canvas>
     <header class="site-header">
       <span class="company-name">Verdant</span>
@@ -84,6 +102,7 @@
     <div class="scene-anchor" id="explore" aria-hidden="true"></div>
     <div class="scene-anchor" id="the-rift" aria-hidden="true"></div>
     <div class="scene-anchor" id="roots" aria-hidden="true"></div>
-    <script type="module" src="/src/main.js"></script>
+    </div>
+    <script type="module" src="/src/boot.js"></script>
   </body>
 </html>

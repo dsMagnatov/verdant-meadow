@@ -14,6 +14,7 @@ Build with `pnpm build`, then serve the `dist` directory (`pnpm preview`). Requi
 ## Scene structure
 
 - `src/main.js`: renderer, lighting, texture/model loaders, pointer smoothing, camera rig and render loop.
+- `src/boot.js` and `src/preloader.js`: a lightweight entry, rolling percentage digits and a progress line gated by decoded assets, fonts, shader preparation and the first rendered scene frame.
 - `src/menu.js`: modal opening/dismissal, native focus trapping, scroll locking and navigation through the scene.
 - `src/responsive.js`: reference-based desktop scaling, portrait framing, rendering budgets and stable mobile scroll distance.
 - `src/environment.js`: emerald sky, terrain, distant hills, moss-covered scanned boulders and drifting luminous pollen.
@@ -34,6 +35,8 @@ Build with `pnpm build`, then serve the `dist` directory (`pnpm preview`). Requi
 The hatch leaves slide 3.3 meters in opposite directions before the camera crosses the ground. Their foliage stays attached. The terrain has an actual opening, and the camera descends to Y=-11.4 meters before moving forward from Z=1.8 to Z=-30 along the central tunnel. The original opening/descent keeps its five-viewport scroll distance. Scrolling back reverses the same poses, plant growth and content reveals. `logoAnchor` holds the rotating glass emblem above the hatch. The rig is available in `window.sceneRig` during development.
 
 Texture and model sources are recorded in `docs/asset-sources.md`. All runtime assets and Draco/Basis decoders are served locally. No external asset requests are required after the page loads.
+
+A dark green preloader paints from a small entry bundle before the 3D engine loads. Three rolling digit columns and a one-pixel progress line follow weighted loading stages: engine, fonts, thirteen decoded scene resources, geometry, shader compilation and the first rendered frame. The scene remains hidden and inert with scrolling locked until completion. At 100%, the digits settle and the overlay fades away. Failed assets or initialization show a retry button; reduced motion removes digit rolling and the exit animation.
 
 The sky, directional sun and light shafts share one sun direction. A 4096 px shadow map includes moving cutout shadows from ferns, herbs and flowers; low fill light keeps the shaded sides of rocks distinct. Local depth occlusion anchors foliage and moss to surfaces. Volumetric light integrates 24 samples along each view ray, clipped at the visible surface and shadowed by the scene. This is rasterized lighting with ray-marched atmospheric scattering, not hardware ray tracing.
 
