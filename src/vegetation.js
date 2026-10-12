@@ -19,12 +19,18 @@ function addPlantMotion(material, uniforms, {
     shader.uniforms.uPlantTime = uniforms.time;
     shader.uniforms.uPlantPointer = uniforms.pointerWorld;
     shader.uniforms.uPlantPointerActive = uniforms.pointerActive;
+    shader.uniforms.uPlantRayOrigin = uniforms.pointerRayOrigin ?? { value: new THREE.Vector3(1e6, 1e6, 1e6) };
+    shader.uniforms.uPlantRayDirection = uniforms.pointerRayDirection ?? { value: new THREE.Vector3(0, 0, -1) };
+    shader.uniforms.uPlantPointerPresence = uniforms.pointerPresence ?? { value: 0 };
     shader.vertexShader = shader.vertexShader.replace(
       '#include <common>',
       `#include <common>
        uniform float uPlantTime;
        uniform vec3 uPlantPointer;
        uniform float uPlantPointerActive;
+       uniform vec3 uPlantRayOrigin;
+       uniform vec3 uPlantRayDirection;
+       uniform float uPlantPointerPresence;
        varying float vPlantHover;
        varying float vPlantHeight;`,
     );
@@ -33,15 +39,27 @@ function addPlantMotion(material, uniforms, {
       `#include <begin_vertex>
        vec3 plantAnchor = modelMatrix[3].xyz;
        vec3 plantAxisX = vec3(1.0, 0.0, 0.0);
+       vec3 plantScaledYAxis = vec3(0.0, 1.0, 0.0);
        vec3 plantAxisZ = vec3(0.0, 0.0, 1.0);
        #ifdef USE_INSTANCING
          plantAnchor = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
          plantAxisX = normalize((modelMatrix * vec4(instanceMatrix[0].xyz, 0.0)).xyz);
+         plantScaledYAxis = (modelMatrix * vec4(instanceMatrix[1].xyz, 0.0)).xyz;
          plantAxisZ = normalize((modelMatrix * vec4(instanceMatrix[2].xyz, 0.0)).xyz);
        #endif
        vec2 pointerDelta = plantAnchor.xz - uPlantPointer.xz;
        float pointerDistance = length(pointerDelta);
-       float plantHover = (1.0 - smoothstep(0.15, 1.25, pointerDistance)) * uPlantPointerActive;
+       float surfaceHover = (1.0 - smoothstep(0.15, 1.25, pointerDistance)) * uPlantPointerActive;
+       vec3 plantProbe = plantAnchor + plantScaledYAxis * (0.40 * ${heightRange.toFixed(3)});
+       float rayT = dot(plantProbe - uPlantRayOrigin, uPlantRayDirection);
+       vec3 closestRayPoint = uPlantRayOrigin + max(0.0, rayT) * uPlantRayDirection;
+       float rayHover = (1.0 - smoothstep(0.20, 0.85, distance(plantProbe, closestRayPoint)))
+                      * uPlantPointerPresence * step(0.0, rayT);
+       float plantHover = max(surfaceHover, rayHover);
+       if (rayHover > surfaceHover) {
+         pointerDelta = plantAnchor.xz - closestRayPoint.xz;
+         pointerDistance = length(pointerDelta);
+       }
        vPlantHover = plantHover;
        float plantHeight = clamp(position.y / ${heightRange.toFixed(3)}, 0.0, 1.0);
        vPlantHeight = plantHeight;
@@ -223,7 +241,10 @@ export function createVegetation({
   const random = rand(301824);
   const dummy = new THREE.Object3D();
   const tint = new THREE.Color();
-  const counts = { ferns: 0, herbs: 0, flowers: 0, grassClumps: 0, mossClumps: 0, onHatchPlants: 0, onRockPlants: 0, fernVertices: 0 };
+  const counts = {
+    ferns: 0, herbs: 0, flowers: 0, grassClumps: 0, mossClumps: 0,
+    onHatchPlants: 0, onRockPlants: 0, tallHatchPlants: 0, tallRockPlants: 0, fernVertices: 0,
+  };
   let herbSurface;
   let flowerSurface;
   const hasHatchSurface = Boolean(hatch?.contains && hatch?.left && hatch?.right);
@@ -564,6 +585,70 @@ export function createVegetation({
   group.add(moss);
   attachToSurfaces(moss);
 
+  if (hasHatchSurface) {
+    const tallCenters = [];
+    for (let attempt = 0; tallCenters.length < 18 && attempt < 500; attempt++) {
+      const side = attempt % 2 === 0 ? -1 : 1;
+      const x = side * (1.65 + random() * 3.0);
+      const z = -3.7 + random() * 7.4;
+      if (!hatch.contains(x, z) || !plantAllowed(x, z, 0.55)) continue;
+      if (hatch.surfaceHeight && groundHeight(x, z) > hatch.surfaceHeight(x, z) + 0.035) continue;
+      tallCenters.push({ x, z, radius: 0.42 + random() * 0.36 });
+    }
+
+    function tallHatchPoints(amount, isFern) {
+      const points = [];
+      for (let attempt = 0; points.length < amount && attempt < amount * 100 && tallCenters.length; attempt++) {
+        const center = tallCenters[Math.floor(random() * tallCenters.length)];
+        const x = center.x + (random() + random() - 1) * center.radius;
+        const z = center.z + (random() + random() - 1) * center.radius;
+        const height = 0.60 + random() ** 0.8 * 0.60 + (!isFern && points.length % 18 === 0 ? 0.10 : 0);
+        const width = isFern ? 0.65 + random() * 0.18 : 0.74 + random() * 0.28;
+        const footprint = height * width * (isFern ? 1.15 : 0.55);
+        if (Math.abs(x) < Math.max(1.4, 0.50 + footprint * 1.12) || Math.abs(x) > 4.8 || z < -4 || z > 4) continue;
+        if (!hatch.contains(x, z) || !plantAllowed(x, z, 0.55)) continue;
+        if (hatch.surfaceHeight && groundHeight(x, z) > hatch.surfaceHeight(x, z) + 0.035) continue;
+        points.push({ x, z, height, width, lean: 0.12, color: 0xe0edbb });
+      }
+      return points;
+    }
+
+    const tallFernPoints = tallHatchPoints(136, true);
+    if (tallFernPoints.length) {
+      const tallFerns = new THREE.InstancedMesh(fern, fernSurface, tallFernPoints.length);
+      tallFerns.name = 'tall-hatch-fern-patches';
+      tallFerns.receiveShadow = true;
+      tallFerns.frustumCulled = false;
+      tallFernPoints.forEach((point, index) => setPlant(tallFerns, index, point));
+      tallFerns.instanceMatrix.needsUpdate = true;
+      tallFerns.instanceColor.needsUpdate = true;
+      group.add(tallFerns);
+      counts.ferns += tallFernPoints.length;
+      counts.fernVertices += tallFernPoints.length * vertexCount;
+      counts.tallHatchPlants += tallFernPoints.length;
+      attachToSurfaces(tallFerns);
+    }
+    if (atlas) {
+      const tallHerbPoints = tallHatchPoints(120, false);
+      const columns = [0, 1, 2, 3, 4, 7];
+      columns.forEach((column, columnIndex) => {
+        const points = tallHerbPoints.filter((_, index) => index % columns.length === columnIndex);
+        if (!points.length) return;
+        const tallHerbs = new THREE.InstancedMesh(makeCrossedHerbGeometry(column), herbSurface, points.length);
+        tallHerbs.name = `tall-hatch-leafy-stems-${column}`;
+        tallHerbs.receiveShadow = true;
+        tallHerbs.frustumCulled = false;
+        points.forEach((point, index) => setPlant(tallHerbs, index, point));
+        tallHerbs.instanceMatrix.needsUpdate = true;
+        tallHerbs.instanceColor.needsUpdate = true;
+        group.add(tallHerbs);
+        counts.herbs += points.length;
+        counts.tallHatchPlants += points.length;
+        attachToSurfaces(tallHerbs);
+      });
+    }
+  }
+
   // Samples come from the actual transformed boulder surfaces. Deduplication
   // spreads the small rooted clusters rather than stacking plants on vertices.
   const rockCells = new Map();
@@ -583,15 +668,15 @@ export function createVegetation({
   const alignment = new THREE.Quaternion();
   const yaw = new THREE.Quaternion();
 
-  function placeOnRock(mesh, index, sample, minHeight, maxHeight) {
-    const scale = THREE.MathUtils.clamp(sample.rockScale ?? 1, 0.65, 1.35);
+  function placeOnRock(mesh, index, sample, minHeight, maxHeight, tall = false) {
+    const scale = tall ? 1 : THREE.MathUtils.clamp(sample.rockScale ?? 1, 0.65, 1.35);
     const height = (minHeight + random() * (maxHeight - minHeight)) * scale;
     const normal = sample.normal.clone().normalize();
     dummy.position.copy(sample.position).addScaledVector(normal, 0.02);
     alignment.setFromUnitVectors(up, normal);
     yaw.setFromAxisAngle(up, random() * Math.PI * 2);
     dummy.quaternion.copy(alignment).multiply(yaw);
-    const width = height * (0.85 + random() * 0.20);
+    const width = height * (tall ? 0.74 + random() * 0.22 : 0.85 + random() * 0.20);
     dummy.scale.set(width, height, width);
     dummy.updateMatrix();
     mesh.setMatrixAt(index, dummy.matrix);
@@ -599,17 +684,18 @@ export function createVegetation({
     mesh.setColorAt(index, tint);
   }
 
-  function populateRockBatch(name, geometry, material, samples, minHeight, maxHeight) {
+  function populateRockBatch(name, geometry, material, samples, minHeight, maxHeight, tall = false) {
     if (!samples.length) return null;
     const mesh = new THREE.InstancedMesh(geometry, material, samples.length);
     mesh.name = name;
     mesh.receiveShadow = true;
     mesh.frustumCulled = false;
-    samples.forEach((sample, index) => placeOnRock(mesh, index, sample, minHeight, maxHeight));
+    samples.forEach((sample, index) => placeOnRock(mesh, index, sample, minHeight, maxHeight, tall));
     mesh.instanceMatrix.needsUpdate = true;
     mesh.instanceColor.needsUpdate = true;
     group.add(mesh);
     counts.onRockPlants += samples.length;
+    if (tall) counts.tallRockPlants += samples.length;
     return mesh;
   }
 
@@ -635,6 +721,37 @@ export function createVegetation({
       populateRockBatch(`boulder-rooted-flowers-${cellIndex}`, makeCrossedHerbGeometry(cell.column, cell.row), flowerSurface, samples, 0.10, 0.23);
       counts.flowers += samples.length;
     }
+  }
+
+  const centerBackSamples = eligibleRocks.filter(sample => sample.role === 'center-back');
+  const tallRockSource = centerBackSamples.length ? centerBackSamples : eligibleRocks.filter(sample =>
+    Math.abs(sample.position.x) < 6.2 && sample.position.z > -16 && sample.position.z < -5,
+  );
+  const tallRockCells = new Map();
+  for (const sample of tallRockSource) {
+    const p = sample.position;
+    const cell = `${Math.floor(p.x / 0.33)},${Math.floor(p.y / 0.33)},${Math.floor(p.z / 0.33)}`;
+    if (!tallRockCells.has(cell)) tallRockCells.set(cell, sample);
+  }
+  const tallRockPoints = [...tallRockCells.values()].slice(0, 140);
+  const tallRockFerns = tallRockPoints.filter((_, index) => !atlas || index % 14 < 7);
+  populateRockBatch('central-boulder-tall-ferns', fern, fernSurface, tallRockFerns, 0.45, 0.95, true);
+  counts.ferns += tallRockFerns.length;
+  counts.fernVertices += tallRockFerns.length * vertexCount;
+  if (atlas) {
+    const tallRockHerbs = tallRockPoints.filter((_, index) => index % 14 >= 7 && index % 14 < 12);
+    for (let column = 0; column < 5; column++) {
+      const samples = tallRockHerbs.filter((_, index) => index % 5 === column);
+      populateRockBatch(`central-boulder-tall-leafy-stems-${column}`, makeCrossedHerbGeometry(column), herbSurface, samples, 0.50, 1.00, true);
+      counts.herbs += samples.length;
+    }
+    const tallRockFlowers = tallRockPoints.filter((_, index) => index % 14 >= 12);
+    const flowerCells = [{ row: 3, column: 6 }, { row: 4, column: 5 }, { row: 0, column: 1 }];
+    flowerCells.forEach((cell, cellIndex) => {
+      const samples = tallRockFlowers.filter((_, index) => index % flowerCells.length === cellIndex);
+      populateRockBatch(`central-boulder-tall-flowering-stems-${cellIndex}`, makeCrossedHerbGeometry(cell.column, cell.row), flowerSurface, samples, 0.65, 1.05, true);
+      counts.flowers += samples.length;
+    });
   }
   group.userData.counts = counts;
   return { group, counts };

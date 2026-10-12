@@ -232,6 +232,12 @@ export function scatterRocks(scene, geometries, material) {
     { x: 9.7, z: -10.3, scale: 2.6, rotation: 5.03 },
     { x: 6.9, z: -12.7, scale: 2.2, rotation: .31 },
     { x: 8.6, z: 1.0, scale: 1.9, rotation: 3.02 },
+    // Nearer central banks fill the back meadow, with a low passage at x=0.
+    { x: -3.05, z: -8.85, scale: 3.8, rotation: 1.16, role: 'center-back' },
+    { x: -2.85, z: -11.4, scale: 3.4, rotation: 3.93, role: 'center-back' },
+    { x: 3.10, z: -9.0, scale: 3.65, rotation: 2.37, role: 'center-back' },
+    { x: 3.60, z: -11.8, scale: 4.0, rotation: .64, role: 'center-back' },
+    { x: .35, z: -12.45, scale: 2.7, rotation: 4.80, burial: .35, role: 'center-back' },
   ];
   for (let i = 0; i < 44; i++) {
     let x, z;
@@ -255,9 +261,11 @@ export function scatterRocks(scene, geometries, material) {
     const mossMesh = new THREE.InstancedMesh(mossShellGeometry(geometry), mossMaterial, spots.length);
     mesh.name = `Rounded scanned boulders ${index}`;
     mossMesh.name = `Raised living moss on boulders ${index}`;
+    mesh.userData.placements = spots;
+    mossMesh.userData.placements = spots;
     spots.forEach((rock, i) => {
-      const scaleY = rock.scale * (.79 + random() * .18);
-      dummy.position.set(rock.x, groundHeight(rock.x, rock.z) - rock.scale * .10, rock.z);
+      const scaleY = rock.scale * (rock.role === 'center-back' ? 1.16 + random() * .16 : .79 + random() * .18);
+      dummy.position.set(rock.x, groundHeight(rock.x, rock.z) - rock.scale * (rock.burial ?? .10), rock.z);
       dummy.rotation.set((random() - .5) * .10, rock.rotation, (random() - .5) * .09);
       dummy.scale.set(rock.scale * (.98 + random() * .16), scaleY, rock.scale * (.90 + random() * .16));
       dummy.updateMatrix();
@@ -278,7 +286,7 @@ export function scatterRocks(scene, geometries, material) {
         const moss = THREE.MathUtils.clamp((normal.y + .22) * .7 + noise2(point.x * 3.2, point.z * 3.2) * .3, 0, 1);
         surfaceSamples.push({
           position: point.clone().addScaledVector(normal, .025),
-          normal: normal.clone(), rockScale: rock.scale, moss,
+          normal: normal.clone(), rockScale: rock.scale, moss, role: rock.role ?? 'side-frame',
         });
       }
     });
@@ -295,42 +303,59 @@ export function scatterRocks(scene, geometries, material) {
 }
 
 export function createDust(scene) {
-  const count = 1050, random = rand(42);
+  const count = 1680, random = rand(42);
   const positions = new Float32Array(count * 3);
   const phases = new Float32Array(count), sizes = new Float32Array(count), alphas = new Float32Array(count);
+  const drifts = new Float32Array(count);
   for (let i = 0; i < count; i++) {
     positions[i * 3] = (random() - .5) * 28;
     positions[i * 3 + 1] = .4 + random() * 9.6;
     positions[i * 3 + 2] = -20 + random() * 27;
     phases[i] = random() * Math.PI * 2;
-    sizes[i] = .012 + random() ** 2 * .030;
-    alphas[i] = .43 + random() * .53;
+    const sizeBand = i / count;
+    if (sizeBand < .70) {
+      sizes[i] = .009 + random() * .016;
+      alphas[i] = .46 + random() * .48;
+    } else if (sizeBand < .94) {
+      sizes[i] = .028 + random() * .042;
+      alphas[i] = .33 + random() * .43;
+    } else {
+      sizes[i] = .075 + random() * .075;
+      alphas[i] = .17 + random() * .18;
+    }
+    drifts[i] = .55 + random() * 1.05;
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute('aPhase', new THREE.BufferAttribute(phases, 1));
   geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
   geometry.setAttribute('aAlpha', new THREE.BufferAttribute(alphas, 1));
+  geometry.setAttribute('aDrift', new THREE.BufferAttribute(drifts, 1));
   const uniforms = { uTime: { value: 0 }, uViewport: { value: window.innerHeight } };
   const material = new THREE.ShaderMaterial({
     uniforms, transparent: true, blending: THREE.AdditiveBlending,
     depthWrite: false, depthTest: true,
-    vertexShader: `attribute float aPhase;attribute float aSize;attribute float aAlpha;
-      uniform float uTime;uniform float uViewport;varying float vAlpha;
+    vertexShader: `attribute float aPhase;attribute float aSize;attribute float aAlpha;attribute float aDrift;
+      uniform float uTime;uniform float uViewport;varying float vAlpha;varying float vSoftness;
       void main(){vec3 p=position;
-        p.x+=sin(uTime*.12+aPhase)*.30;
-        p.z+=cos(uTime*.10+aPhase*1.4)*.24;
-        p.y=.4+mod(position.y-.4+uTime*(.045+.018*sin(aPhase)),9.6);
+        vSoftness=smoothstep(.028,.12,aSize);
+        p.x+=sin(uTime*(.05+.07*aDrift)+aPhase)*(.14+.31*aDrift);
+        p.z+=cos(uTime*(.05+.03*aDrift)+aPhase*1.71)*(.12+.20*aDrift);
+        p.y=.4+mod(position.y-.4+uTime*(.028+.025*aDrift)*(1.-vSoftness*.45),9.6);
+        p.y+=sin(uTime*.20+aPhase*.60)*.025;
         vec4 viewPosition=modelViewMatrix*vec4(p,1.);
         gl_Position=projectionMatrix*viewPosition;
-        gl_PointSize=clamp(aSize*uViewport*projectionMatrix[1][1]/max(1.,-viewPosition.z),1.65,6.0);
-        vAlpha=aAlpha*(.65+.35*pow(sin(uTime*.34+aPhase),2.));
+        gl_PointSize=clamp(aSize*uViewport*projectionMatrix[1][1]/max(1.,-viewPosition.z),1.05,14.0);
+        vAlpha=aAlpha*(.72+.28*pow(sin(uTime*(.19+.37*aDrift)+aPhase),2.));
+        vAlpha*=mix(1.,.68,vSoftness);
       }`,
-    fragmentShader: `varying float vAlpha;
+    fragmentShader: `varying float vAlpha;varying float vSoftness;
       void main(){vec2 p=gl_PointCoord-.5;float r=dot(p,p);
         if(r>.245)discard;
-        float core=exp(-r*88.),halo=exp(-r*17.);
-        gl_FragColor=vec4(vec3(2.05,1.43,.30)*(core+halo*.24),(core+halo*.32)*vAlpha);
+        float core=exp(-r*mix(88.,34.,vSoftness)),halo=exp(-r*mix(17.,12.,vSoftness));
+        float brightness=mix(1.,.42,vSoftness);
+        float edge=1.-smoothstep(.13,.245,r);
+        gl_FragColor=vec4(vec3(2.05,1.43,.30)*brightness*(core+halo*.24),(core+halo*.32)*vAlpha*edge);
       }`,
   });
   const points = new THREE.Points(geometry, material);

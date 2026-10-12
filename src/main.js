@@ -52,7 +52,10 @@ composer.addPass(new OutputPass());
 const environment=createEnvironment(scene);
 const pollen=createDust(scene);
 
-const uniforms={time:{value:0},pointerWorld:{value:new THREE.Vector3(1000,0,1000)},pointerActive:{value:0}};
+const uniforms={
+  time:{value:0},pointerWorld:{value:new THREE.Vector3(1000,0,1000)},pointerActive:{value:0},
+  pointerRayOrigin:{value:new THREE.Vector3()},pointerRayDirection:{value:new THREE.Vector3(0,0,-1)},pointerPresence:{value:0},
+};
 const pointer=new THREE.Vector2(0,0), smoothPointer=new THREE.Vector2(0,0);
 const targetWorld=new THREE.Vector3(1000,0,1000), raycaster=new THREE.Raycaster();
 let pointerInside=false, pointerPresence=0, visible=true, assetsReady=false, lastTime=performance.now(),averageFrameMs=16.7;
@@ -162,6 +165,7 @@ async function populate() {
   // Read-only diagnostics are exposed for browser QA; there is no on-screen UI.
   window.sceneDiagnostics={ready:true,plants:vegetation.counts,hatchHalves:2,referenceAssets:true,interaction:'rooted rise, bend and warm glow',reducedMotion};
   canvas.dataset.ready='true';canvas.dataset.plants=JSON.stringify(vegetation.counts);
+  canvas.dataset.revision='tall-greenery-3';canvas.dataset.particles=String(pollen.points.geometry.attributes.position.count);
   canvas.dataset.composition='wide moss hatch, continuous crack';canvas.dataset.blur='corners only';
   canvas.dataset.rocks=String(landscapeRocks.placements?.length||0);
   window.sceneRig={hatch:hatch.group,left:hatch.left,right:hatch.right,logoAnchor:hatch.logoAnchor,descentTarget:hatch.descentTarget,camera};
@@ -184,10 +188,13 @@ window.addEventListener('resize',()=>{
 function updatePointer(dt) {
   smoothPointer.lerp(pointer,1-Math.exp(-4*dt));
   pointerPresence=THREE.MathUtils.damp(pointerPresence,pointerInside?1:0,6,dt);
+  uniforms.pointerPresence.value=pointerPresence;
   let hit=false;
   if(pointerInside) {
     raycaster.setFromCamera(smoothPointer,camera);
     const r=raycaster.ray;
+    uniforms.pointerRayOrigin.value.copy(r.origin);
+    uniforms.pointerRayDirection.value.copy(r.direction);
     const difference=t=>{
       const x=r.origin.x+r.direction.x*t,z=r.origin.z+r.direction.z*t;
       return r.origin.y+r.direction.y*t-sceneSurfaceHeight(x,z);
@@ -236,6 +243,7 @@ function render(now) {
     d.triangles=renderer.info.render.triangles;
     d.time=Number(uniforms.time.value.toFixed(2));
     canvas.dataset.hover=String(d.hover);canvas.dataset.pointer=JSON.stringify(d.pointer);
+    canvas.dataset.pointerPresence=String(Number(pointerPresence.toFixed(3)));
     canvas.dataset.drawCalls=String(d.drawCalls);canvas.dataset.triangles=String(d.triangles);
     averageFrameMs=THREE.MathUtils.lerp(averageFrameMs,elapsed,.035);
     canvas.dataset.fps=String(Math.round(1000/Math.max(1,averageFrameMs)));
