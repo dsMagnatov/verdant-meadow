@@ -39,4 +39,6 @@ Extra fine grass grows along both fracture banks. Its irregular clearance follow
 
 The foreground stone grass includes a dense shorter layer of leaning blades underneath the taller strands. This overlaps the gaps between roots and gives the grass patches a continuous dark base. The lower layer uses three triangles per blade and shares existing instanced tiles, wind, pointer response, shadows and distance culling.
 
+The left foreground clearing overrides the exposed-stone grass mask and adds both grass layers on the actual stone/terrain surface. A shared irregular region thins the fern and leafy shrub roots by up to 74%, leaving scattered reactive plants above the grass. Filtering uses a separate random sequence so flowers, boulders and the rest of the meadow keep their positions.
+
 Run `node scripts/check-journey.mjs` to check clearance before the camera crosses the ground, continuous forward orientation, reverse scrolling, frame-rate independent damping and reduced-motion behavior. Native scroll remains available with wheel, trackpad and keyboard. Reduced motion removes decorative wind/parallax and scroll damping while retaining the user-controlled journey.

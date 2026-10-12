@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { rand, noise2 } from './math.js';
 import { createDenseGrass } from './dense-grass.js';
+import { leftGrassClearing } from './meadow-layout.js';
 
 const HATCH_X = 2.58;
 const HATCH_Z = 1.82;
@@ -241,11 +242,12 @@ export function createVegetation({
   group.name = 'living-meadow';
   scene.add(group);
   const random = rand(301824);
+  const clearingRandom = rand(8975);
   const dummy = new THREE.Object3D();
   const tint = new THREE.Color();
   const counts = {
     ferns: 0, herbs: 0, flowers: 0, grassClumps: 0, mossClumps: 0,
-    onHatchPlants: 0, onRockPlants: 0, tallHatchPlants: 0, tallRockPlants: 0, fernVertices: 0,
+    onHatchPlants: 0, onRockPlants: 0, tallHatchPlants: 0, tallRockPlants: 0, fernVertices: 0, leftClearingPlantsRemoved: 0,
   };
   const depthMaterials = new WeakMap();
   let herbSurface;
@@ -297,11 +299,26 @@ export function createVegetation({
     const buckets = [[], [], []];
     const matrix = new THREE.Matrix4();
     const color = new THREE.Color();
+    const isFern = mesh.name.includes('fern');
+    const thinInClearing = isFern || mesh.name.startsWith('gladeye-green-')
+      || mesh.name.startsWith('tall-hatch-leafy-stems-');
     mesh.updateWorldMatrix(true, false);
     for (let index = 0; index < mesh.count; index++) {
       mesh.getMatrixAt(index, matrix);
       const world = matrix.clone().premultiply(mesh.matrixWorld);
       const x = world.elements[12], z = world.elements[14];
+      // Filter the finished roots with a separate RNG so the rest of the
+      // meadow, flowers and boulder clusters keep their existing placement.
+      const clearing = thinInClearing ? leftGrassClearing(x, z) : 0;
+      if (clearing > 0 && clearingRandom() < clearing * .74) {
+        counts.leftClearingPlantsRemoved++;
+        if (isFern) {
+          counts.ferns--;
+          counts.fernVertices -= mesh.geometry.getAttribute('position').count;
+        } else counts.herbs--;
+        if (mesh.name.startsWith('tall-hatch-')) counts.tallHatchPlants--;
+        continue;
+      }
       const onHatch = hatch.contains(x, z)
         && (!hatch.surfaceHeight || groundHeight(x, z) <= hatch.surfaceHeight(x, z) + 0.035);
       const half = onHatch ? hatch.leafForPoint?.(x, z) : null;

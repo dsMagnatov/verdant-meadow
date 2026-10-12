@@ -209,7 +209,7 @@ async function populate() {
   // Read-only diagnostics are exposed for browser QA; there is no on-screen UI.
   window.sceneDiagnostics={ready:true,plants:vegetation.counts,hatchHalves:2,referenceAssets:true,interaction:'rooted rise, bend and warm glow',reducedMotion};
   canvas.dataset.ready='true';canvas.dataset.plants=JSON.stringify(vegetation.counts);
-  canvas.dataset.revision='dense-cover-8';canvas.dataset.particles=String(pollen.points.geometry.attributes.position.count);
+  canvas.dataset.revision='left-clearing-9';canvas.dataset.particles=String(pollen.points.geometry.attributes.position.count);
   canvas.dataset.lighting='4096 sun shadows, contact occlusion, shadowed volumetric sunlight';
   canvas.dataset.composition='wide moss hatch, continuous crack';canvas.dataset.blur='corners only';
   canvas.dataset.rocks=String(landscapeRocks.placements?.length||0);
