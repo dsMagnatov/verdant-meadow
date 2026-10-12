@@ -58,8 +58,8 @@ export function createGlassLogo({parent,renderer,svg,sky,startTime=0,reducedMoti
   geometry.rotateX(Math.PI);geometry.computeBoundingSphere();geometry.computeBoundingBox();
   const reflections=createGlassReflections(renderer,sky);
   const material=new THREE.MeshPhysicalMaterial({
-    name:'Soft frosted meadow glass',color:0xeafff5,metalness:0,roughness:.27,
-    transmission:.92,thickness:(depth+2.1)*scale,ior:1.48,
+    name:'Soft frosted meadow glass',color:0xeafff5,metalness:0,roughness:.40,
+    transmission:.90,thickness:(depth+2.1)*scale,ior:1.48,
     attenuationColor:0xcdebdc,attenuationDistance:5,
     clearcoat:1,clearcoatRoughness:.04,specularIntensity:1,
     envMap:reflections.texture,envMapIntensity:1.2,

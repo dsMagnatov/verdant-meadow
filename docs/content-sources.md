@@ -11,3 +11,5 @@ The general public-cloud/on-premises distinction in the table follows primary re
 Traditional on-premises provisioning is described as stack-dependent, avoiding an assumption that all on-premises systems are manual. Local growth is tied to adding physical resources, not unlimited elasticity.
 
 The owner requested that the feedback button have no destination for this iteration.
+
+The numeric rows are an explicitly illustrative configuration, not measured Verdant specifications. The comparison assumes 96 vCPU in each model, with three local servers/nodes for the two on-premises examples and no on-site servers for the public-cloud example. Visible example labels and the configuration note keep these numbers distinct from product claims.

@@ -66,6 +66,11 @@ body.menu-open .hero-copy { filter: opacity(0); }
 .comparison-table tbody th { color: #ecede9; }
 .comparison-table td { color: #a7afa5; }
 .comparison-table .verdant-cell { color: #e6f1cf; }
+.comparison-metrics th, .comparison-metrics td { padding-top: 14px; padding-bottom: 14px; }
+.metric-number { display: inline-block; margin-right: 12px; font-size: clamp(36px, 2.7vw, 52px); line-height: 1; color: #eff2e9; font-variant-numeric: lining-nums tabular-nums; }
+.verdant-cell .metric-number { color: #e6f1cf; }
+.metric-unit { display: inline-block; font-size: 17px; color: #a7afa5; }
+.comparison-note { margin: 14px 0 0; color: #a6afa1; font-size: 16px; line-height: 1.2; }
 .finale-contact { display: flex; align-items: center; justify-content: space-between; gap: 40px; margin-top: 40px; }
 .finale-contact p { margin: 0; font-size: clamp(21px, 1.5vw, 29px); line-height: 1.18; color: #c4cbc1; }
 .contact-button { border: 0; border-radius: 12px; background: #f6f8ec; color: #10170e; padding: 18px 38px; font-family: 'Instrument Serif', serif; font-size: 26px; line-height: 1; white-space: nowrap; cursor: pointer; transition: background-color .2s, transform .2s; }
