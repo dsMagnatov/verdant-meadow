@@ -7,10 +7,10 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { createDepthOfField } from './postprocessing.js';
+import { createAtmospherePass } from './postprocessing.js';
 import { createEnvironment, scatterRocks, createDust } from './environment.js';
 import { createVegetation } from './vegetation.js';
-import { createHatch } from './hatch.js';
+import { createHatch, hatchContains, hatchHeight } from './hatch.js';
 import { groundHeight } from './math.js';
 import './style.css';
 
@@ -20,33 +20,33 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.6));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.22;
+renderer.toneMappingExposure = 1.02;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.info.autoReset=false;
 renderer.setClearColor(0x716f58);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0xb2ae94, .013);
+scene.fog = new THREE.FogExp2(0xc5ce89, .018);
 const camera = new THREE.PerspectiveCamera(48, window.innerWidth/window.innerHeight,.1,400);
-const cameraHome = new THREE.Vector3(0, 3.5, 8.9);
-const lookHome = new THREE.Vector3(0, 1.7, -2.0);
+const cameraHome = new THREE.Vector3(0, 3.4, 8.9);
+const lookHome = new THREE.Vector3(0, 2.25, -2.5);
 camera.position.copy(cameraHome); camera.lookAt(lookHome);
-scene.add(new THREE.HemisphereLight(0xc9daf0,0x606633,2.15));
-scene.add(new THREE.AmbientLight(0xffe8cf,.22));
-const sun = new THREE.DirectionalLight(0xffd5a3,3.5);
-sun.position.set(-15,10,-8); sun.target.position.set(0,0,-3);
+scene.add(new THREE.HemisphereLight(0xc9d6a4,0x253715,1.05));
+scene.add(new THREE.AmbientLight(0xdce6a4,.10));
+const sun = new THREE.DirectionalLight(0xffed97,4.6);
+sun.position.set(-13,12,-9); sun.target.position.set(0,0,-3);
 sun.castShadow=true; sun.shadow.mapSize.set(2048,2048);
 Object.assign(sun.shadow.camera,{left:-20,right:20,top:20,bottom:-20,near:.5,far:60});
 sun.shadow.bias=-.0004; sun.shadow.normalBias=.055; sun.shadow.radius=3;
 scene.add(sun,sun.target);
-const fill=new THREE.DirectionalLight(0xbacddc,.55); fill.position.set(8,6,8);scene.add(fill);
+const fill=new THREE.DirectionalLight(0xb8d394,.4); fill.position.set(8,6,8);scene.add(fill);
 
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene,camera));
-const depthOfField=createDepthOfField(composer,camera);
-composer.addPass(depthOfField);
-const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth,window.innerHeight),.24,.45,1.1);
+const atmosphere=createAtmospherePass(composer,camera);
+composer.addPass(atmosphere);
+const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth,window.innerHeight),.35,.50,1.15);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 const environment=createEnvironment(scene);
@@ -57,6 +57,11 @@ const pointer=new THREE.Vector2(0,0), smoothPointer=new THREE.Vector2(0,0);
 const targetWorld=new THREE.Vector3(1000,0,1000), raycaster=new THREE.Raycaster();
 let pointerInside=false, pointerPresence=0, visible=true, assetsReady=false, lastTime=performance.now(),averageFrameMs=16.7;
 const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function sceneSurfaceHeight(x,z) {
+  const terrain=groundHeight(x,z);
+  return hatchContains(x,z)?Math.max(terrain,hatchHeight(x,z)):terrain;
+}
 
 const ktx = new KTX2Loader().setTranscoderPath('/assets/decoders/basis/').detectSupport(renderer);
 const draco = new DRACOLoader().setDecoderPath('/assets/decoders/draco/');
@@ -77,12 +82,16 @@ function normalizedGeometry(mesh) {
 }
 
 function enhanceStone(material) {
+  material.bumpMap=environment.terrainMaterial.map;
+  material.bumpScale=.015;
   material.onBeforeCompile=shader=>{
+    shader.uniforms.uMossMap={value:environment.terrainMaterial.map};
     shader.vertexShader=shader.vertexShader.replace('#include <common>',`#include <common>
       varying vec3 vStonePosition;`).replace('#include <begin_vertex>',`#include <begin_vertex>
       vStonePosition=position;`);
     shader.fragmentShader=shader.fragmentShader.replace('#include <common>',`#include <common>
       varying vec3 vStonePosition;
+      uniform sampler2D uMossMap;
       float stoneHash(vec3 p){return fract(sin(dot(p,vec3(12.9898,78.233,37.719)))*43758.5453);}
       float stoneNoise(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
       return mix(mix(mix(stoneHash(i),stoneHash(i+vec3(1,0,0)),f.x),mix(stoneHash(i+vec3(0,1,0)),stoneHash(i+vec3(1,1,0)),f.x),f.y),mix(mix(stoneHash(i+vec3(0,0,1)),stoneHash(i+vec3(1,0,1)),f.x),mix(stoneHash(i+vec3(0,1,1)),stoneHash(i+vec3(1,1,1)),f.x),f.y),f.z);}`)
@@ -90,9 +99,22 @@ function enhanceStone(material) {
       float detail=stoneNoise(vStonePosition*36.);
       float vein=stoneNoise(vStonePosition*7.);
       diffuseColor.rgb*=.78+detail*.40;
-      diffuseColor.rgb=mix(diffuseColor.rgb,diffuseColor.rgb*vec3(.74,.83,.56),smoothstep(.59,.75,vein)*.45);`);
+      float grayStone=dot(diffuseColor.rgb,vec3(.2126,.7152,.0722));
+      diffuseColor.rgb=mix(diffuseColor.rgb,vec3(grayStone)*vec3(.71,.85,1.05),.68);
+      diffuseColor.rgb=mix(diffuseColor.rgb,diffuseColor.rgb*vec3(.74,.83,.56),smoothstep(.59,.75,vein)*.45);
+      vec2 mossWorld=vec2(vStonePosition.x,vStonePosition.z+2.6);
+      float mossPatch=stoneNoise(vec3(mossWorld*.38,3.7))*.72+stoneNoise(vec3(mossWorld*.93,7.2))*.28;
+      float mossCoverage=smoothstep(.36,.54,mossPatch)*smoothstep(.21,.36,vStonePosition.y);
+      float crackClearance=smoothstep(.11,.29,abs(vStonePosition.x));
+      vec3 mossColor=texture2D(uMossMap,mossWorld*.85).rgb*vec3(.82,1.07,.65);
+      mossColor*=.76+detail*.45;
+      diffuseColor.rgb=mix(diffuseColor.rgb,mossColor,mossCoverage*crackClearance*.95);`)
+      .replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
+        float mossHeight=texture2D(uMossMap,mossWorld*.85).g*.018;
+        vec3 mossBumpNormal=perturbNormalArb(-vViewPosition,normal,vec2(dFdx(mossHeight),dFdy(mossHeight)),faceDirection);
+        normal=normalize(mix(normal,mossBumpNormal,mossCoverage*.72));`);
   };
-  material.customProgramCacheKey=()=> 'weathered-hatch-v1';
+  material.customProgramCacheKey=()=> 'moss-covered-hatch-v2';
   return material;
 }
 
@@ -124,7 +146,7 @@ async function populate() {
       rocks.push(geometry);
     }
   });
-  scatterRocks(scene,rocks,rockMaterial);
+  const landscapeRocks=scatterRocks(scene,rocks,rockMaterial);
 
   stoneMap.colorSpace=THREE.SRGBColorSpace;
   for(const map of [stoneMap,stoneNormal,stoneRough]) {map.wrapS=map.wrapT=THREE.RepeatWrapping;map.repeat.set(.9,.9);map.anisotropy=8;map.needsUpdate=true;}
@@ -134,12 +156,14 @@ async function populate() {
   if(!fernMesh?.isMesh) throw new Error('Fern geometry is missing');
   const fernGeometry=normalizedGeometry(fernMesh);
   const fernMaterial=new THREE.MeshStandardMaterial({map:fernMap,alphaMap:fernMap,alphaTest:.045,normalMap:fernNormal,aoMap:fernAO,aoMapIntensity:.15,color:0xe2f0bc,roughness:.88,side:THREE.DoubleSide,normalScale:new THREE.Vector2(.25,.25)});
-  const vegetation=createVegetation({scene,fernGeometry,fernMaterial,atlas,groundHeight,uniforms});
+  const vegetation=createVegetation({scene,fernGeometry,fernMaterial,atlas,groundHeight:sceneSurfaceHeight,uniforms,hatch,rockSamples:landscapeRocks.surfaceSamples});
   renderer.compile(scene,camera);
   assetsReady=true;
   // Read-only diagnostics are exposed for browser QA; there is no on-screen UI.
-  window.sceneDiagnostics={ready:true,plants:vegetation.counts,hatchHalves:2,referenceAssets:true,interaction:'breeze, cursor bend, scale and glow',reducedMotion};
+  window.sceneDiagnostics={ready:true,plants:vegetation.counts,hatchHalves:2,referenceAssets:true,interaction:'rooted rise, bend and warm glow',reducedMotion};
   canvas.dataset.ready='true';canvas.dataset.plants=JSON.stringify(vegetation.counts);
+  canvas.dataset.composition='wide moss hatch, continuous crack';canvas.dataset.blur='corners only';
+  canvas.dataset.rocks=String(landscapeRocks.placements?.length||0);
   window.sceneRig={hatch:hatch.group,left:hatch.left,right:hatch.right,logoAnchor:hatch.logoAnchor,descentTarget:hatch.descentTarget,camera};
   ktx.dispose();draco.dispose();
 }
@@ -154,7 +178,7 @@ document.addEventListener('visibilitychange',()=>{visible=!document.hidden;lastT
 window.addEventListener('resize',()=>{
   camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth,window.innerHeight);composer.setSize(window.innerWidth,window.innerHeight);
-  depthOfField.uniforms.aspect.value=camera.aspect;
+  atmosphere.uniforms.aspect.value=camera.aspect;
 });
 
 function updatePointer(dt) {
@@ -166,7 +190,7 @@ function updatePointer(dt) {
     const r=raycaster.ray;
     const difference=t=>{
       const x=r.origin.x+r.direction.x*t,z=r.origin.z+r.direction.z*t;
-      return r.origin.y+r.direction.y*t-groundHeight(x,z);
+      return r.origin.y+r.direction.y*t-sceneSurfaceHeight(x,z);
     };
     let lo=.1, previous=difference(lo);
     for(let hi=1.1;hi<=85;hi+=1) {
@@ -199,10 +223,10 @@ function render(now) {
     const influence=pointerPresence;
     camera.position.set(cameraHome.x+smoothPointer.x*.22*influence,cameraHome.y+smoothPointer.y*.09*influence,cameraHome.z);
     camera.lookAt(lookHome.x+smoothPointer.x*.08*influence,lookHome.y+smoothPointer.y*.035*influence,lookHome.z);
-    pollen.rotation.y=uniforms.time.value*.008;
-    pollen.position.y=Math.sin(uniforms.time.value*.2)*.035;
+    pollen.update(uniforms.time.value,camera);
   }
-  depthOfField.uniforms.tDepth.value=composer.readBuffer.depthTexture;
+  atmosphere.uniforms.tDepth.value=composer.readBuffer.depthTexture;
+  atmosphere.uniforms.time.value=uniforms.time.value;
   renderer.info.reset();composer.render();
   if(assetsReady) {
     const d=window.sceneDiagnostics;

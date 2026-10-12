@@ -11,7 +11,7 @@ function outsideHatch(x, z, padding = 0) {
 // Each plant shares one interaction value, so roots remain anchored and the
 // textured fronds move as a coherent rosette instead of stretching individually.
 function addPlantMotion(material, uniforms, {
-  emission = 1.35, breeze = 1, diffuseBoost = 1, baseEmission = 0,
+  emission = 1.35, breeze = 1, diffuseBoost = 1, baseEmission = 0, heightRange = 1,
 } = {}) {
   const originalCompile = material.onBeforeCompile;
   material.onBeforeCompile = (shader, renderer) => {
@@ -43,20 +43,20 @@ function addPlantMotion(material, uniforms, {
        float pointerDistance = length(pointerDelta);
        float plantHover = (1.0 - smoothstep(0.15, 1.25, pointerDistance)) * uPlantPointerActive;
        vPlantHover = plantHover;
-       float plantHeight = clamp(position.y, 0.0, 1.0);
+       float plantHeight = clamp(position.y / ${heightRange.toFixed(3)}, 0.0, 1.0);
        vPlantHeight = plantHeight;
        float rootedWeight = plantHeight * plantHeight;
        float seed = dot(plantAnchor.xz, vec2(2.17, 3.63));
        float windWave = sin(uPlantTime * 0.78 + seed * 0.31)
                       + 0.42 * sin(uPlantTime * 1.57 + seed * 0.79);
        float tipFlutter = sin(uPlantTime * 2.1 + seed) * 0.014;
-       transformed *= 1.0 + plantHover * 0.12;
+       transformed.xz *= 1.0 + plantHover * 0.12;
+       transformed.y *= 1.0 + plantHover * 0.33;
        transformed.x += (windWave * 0.046 + tipFlutter) * rootedWeight * ${breeze.toFixed(3)};
        transformed.z += cos(uPlantTime * 0.67 + seed * 0.43) * 0.032 * rootedWeight * ${breeze.toFixed(3)};
        vec3 awayWorld = vec3(pointerDelta.x, 0.0, pointerDelta.y) / max(pointerDistance, 0.001);
        vec2 awayLocal = vec2(dot(awayWorld, plantAxisX), dot(awayWorld, plantAxisZ));
-       transformed.xz += awayLocal * plantHover * rootedWeight * 0.24;
-       transformed.y -= plantHover * rootedWeight * 0.025;`,
+       transformed.xz += awayLocal * plantHover * rootedWeight * 0.35;`,
     );
     if (emission > 0) {
       shader.fragmentShader = shader.fragmentShader.replace(
@@ -76,17 +76,18 @@ function addPlantMotion(material, uniforms, {
         `#include <emissivemap_fragment>
          totalEmissiveRadiance += diffuseColor.rgb * ${baseEmission.toFixed(3)};
          vec3 hoverGlow = mix(vec3(0.54, 1.07, 0.19), vec3(1.22, 1.32, 0.33), vPlantHeight);
+         hoverGlow *= clamp(diffuseColor.rgb * 1.8, vec3(0.12), vec3(0.90));
          totalEmissiveRadiance += hoverGlow * vPlantHover
-             * (0.18 + 0.82 * vPlantHeight) * ${emission.toFixed(3)};`,
+             * (0.10 + 0.90 * pow(vPlantHeight, 1.6)) * ${emission.toFixed(3)};`,
       );
     }
   };
-  material.customProgramCacheKey = () => `rooted-meadow-${emission}-${breeze}-${diffuseBoost}-${baseEmission}`;
+  material.customProgramCacheKey = () => `rooted-meadow-${emission}-${breeze}-${diffuseBoost}-${baseEmission}-${heightRange}`;
   material.needsUpdate = true;
   return material;
 }
 
-function makeCrossedHerbGeometry(column) {
+function makeCrossedHerbGeometry(column, atlasRow = 5) {
   const positions = [];
   const normals = [];
   const uvs = [];
@@ -106,7 +107,7 @@ function makeCrossedHerbGeometry(column) {
         normals.push(-dz, 0, dx);
         uvs.push(
           column / 8 + inset + side * (1 / 8 - inset * 2),
-          1 / 7 + inset + height * (1 / 7 - inset * 2),
+          1 - (atlasRow + 1) / 7 + inset + height * (1 / 7 - inset * 2),
         );
       }
     }
@@ -177,23 +178,22 @@ function makeMossRosette() {
   const rootColor = new THREE.Color(0x3e601c);
   const leafColor = new THREE.Color();
   const color = new THREE.Color();
-  // Six curved, broad oval leaves. Four segments keep a round silhouette at
-  // close range while the complete 4500-clump carpet stays below 220k triangles.
-  for (let leaf = 0; leaf < 6; leaf++) {
+  // Fine pointed leaves form a low, irregular carpet instead of large clover.
+  for (let leaf = 0; leaf < 8; leaf++) {
     const angle = leaf * 2.399963 + random() * 0.54;
     const dx = Math.cos(angle);
     const dz = Math.sin(angle);
     const length = 0.34 + random() * 0.22;
-    const halfWidth = 0.095 + random() * 0.060;
-    const leafLift = 0.55 + random() * 0.38;
+    const halfWidth = 0.040 + random() * 0.035;
+    const leafLift = 0.33 + random() * 0.32;
     const baseIndex = positions.length / 3;
     leafColor.setHSL(0.22 + random() * 0.095, 0.42 + random() * 0.15, 0.32 + random() * 0.095);
     for (let segment = 0; segment <= 4; segment++) {
       const progress = segment / 4;
-      const roundWidth = Math.sin(progress * Math.PI) ** 0.72 * halfWidth + 0.002;
+      const roundWidth = Math.sin(progress * Math.PI) ** 1.1 * halfWidth + 0.002;
       const outward = 0.025 + progress * length;
       // The leaf arches upward before gently turning its pointed tip down.
-      const lift = 0.14 + Math.sin(progress * Math.PI * 0.77) * leafLift;
+      const lift = Math.sin(progress * Math.PI * 0.77) * leafLift;
       color.copy(rootColor).lerp(leafColor, Math.min(1, progress * 1.5));
       for (let side = -1; side <= 1; side += 2) {
         positions.push(dx * outward - dz * roundWidth * side, lift, dz * outward + dx * roundWidth * side);
@@ -214,14 +214,78 @@ function makeMossRosette() {
   return geometry;
 }
 
-export function createVegetation({ scene, fernGeometry, fernMaterial, atlas, groundHeight, uniforms }) {
+export function createVegetation({
+  scene, fernGeometry, fernMaterial, atlas, groundHeight, uniforms, hatch, rockSamples = [],
+}) {
   const group = new THREE.Group();
   group.name = 'living-meadow';
   scene.add(group);
   const random = rand(301824);
   const dummy = new THREE.Object3D();
   const tint = new THREE.Color();
-  const counts = { ferns: 0, herbs: 0, grassClumps: 0, mossClumps: 0, fernVertices: 0 };
+  const counts = { ferns: 0, herbs: 0, flowers: 0, grassClumps: 0, mossClumps: 0, onHatchPlants: 0, onRockPlants: 0, fernVertices: 0 };
+  let herbSurface;
+  let flowerSurface;
+  const hasHatchSurface = Boolean(hatch?.contains && hatch?.left && hatch?.right);
+  const hatchGroups = hasHatchSurface ? [new THREE.Group(), new THREE.Group()] : null;
+  if (hatchGroups) {
+    hatchGroups[0].name = 'left-stone-vegetation';
+    hatchGroups[1].name = 'right-stone-vegetation';
+    hatch.left.add(hatchGroups[0]);
+    hatch.right.add(hatchGroups[1]);
+  }
+
+  function plantAllowed(x, z, padding = 0) {
+    if (!hasHatchSurface) return outsideHatch(x, z, padding);
+    if (!hatch.contains(x, z)) return true;
+    if (Math.abs(x) < 0.17 + padding) return false;
+    // Shared slow noise creates coherent stone clearings across all species.
+    // Plants on their edges soften the boundaries, leaving roughly a third of
+    // the plate visible instead of filling every available square centimetre.
+    const coverage = noise2(x * 0.36 + 12.7, z * 0.36 + 8.3);
+    return coverage > 0.46;
+  }
+
+  function attachToSurfaces(mesh) {
+    if (!hasHatchSurface) return;
+    const buckets = [[], [], []];
+    const matrix = new THREE.Matrix4();
+    const color = new THREE.Color();
+    mesh.updateWorldMatrix(true, false);
+    for (let index = 0; index < mesh.count; index++) {
+      mesh.getMatrixAt(index, matrix);
+      const world = matrix.clone().premultiply(mesh.matrixWorld);
+      const x = world.elements[12], z = world.elements[14];
+      const onHatch = hatch.contains(x, z)
+        && (!hatch.surfaceHeight || groundHeight(x, z) <= hatch.surfaceHeight(x, z) + 0.035);
+      const half = onHatch ? hatch.leafForPoint?.(x, z) : null;
+      const bucket = onHatch ? (half === hatch.left ? 1 : half === hatch.right ? 2 : x < 0 ? 1 : 2) : 0;
+      mesh.getColorAt(index, color);
+      buckets[bucket].push({ matrix: world, color: color.clone() });
+      if (onHatch) counts.onHatchPlants++;
+    }
+    group.remove(mesh);
+    for (let bucket = 0; bucket < buckets.length; bucket++) {
+      const instances = buckets[bucket];
+      if (!instances.length) continue;
+      const parent = bucket === 0 ? group : hatchGroups[bucket - 1];
+      parent.updateWorldMatrix(true, false);
+      const inverseParent = parent.matrixWorld.clone().invert();
+      const partition = new THREE.InstancedMesh(mesh.geometry, mesh.material, instances.length);
+      partition.name = `${mesh.name}-${bucket === 0 ? 'terrain' : bucket === 1 ? 'left-plate' : 'right-plate'}`;
+      partition.receiveShadow = mesh.receiveShadow;
+      partition.castShadow = mesh.castShadow;
+      partition.customDepthMaterial = mesh.customDepthMaterial;
+      partition.frustumCulled = false;
+      for (let index = 0; index < instances.length; index++) {
+        partition.setMatrixAt(index, instances[index].matrix.premultiply(inverseParent));
+        partition.setColorAt(index, instances[index].color);
+      }
+      partition.instanceMatrix.needsUpdate = true;
+      partition.instanceColor.needsUpdate = true;
+      parent.add(partition);
+    }
+  }
 
   function setPlant(mesh, index, { x, z, height, width = 1, lean = 0.10, color = 0xe3eccb }) {
     dummy.position.set(x, groundHeight(x, z) + 0.006, z);
@@ -233,12 +297,18 @@ export function createVegetation({ scene, fernGeometry, fernMaterial, atlas, gro
     mesh.setColorAt(index, tint);
   }
 
-  function scatter(amount, bounds, callback, { padding = 0, clustered = true, centralOpening = false } = {}) {
+  function scatter(amount, bounds, callback, {
+    padding = 0, clustered = true, centralOpening = false, flowerClusters,
+  } = {}) {
     let planted = 0;
     for (let attempt = 0; planted < amount && attempt < amount * 45; attempt++) {
-      const x = bounds[0] + random() * (bounds[1] - bounds[0]);
-      const z = bounds[2] + random() * (bounds[3] - bounds[2]);
-      if (!outsideHatch(x, z, padding)) continue;
+      const center = flowerClusters?.[Math.floor(random() * flowerClusters.length)];
+      const x = center ? center.x + (random() + random() - 1) * center.radius
+                       : bounds[0] + random() * (bounds[1] - bounds[0]);
+      const z = center ? center.z + (random() + random() - 1) * center.radius
+                       : bounds[2] + random() * (bounds[3] - bounds[2]);
+      if (x < bounds[0] || x > bounds[1] || z < bounds[2] || z > bounds[3]) continue;
+      if (!plantAllowed(x, z, padding)) continue;
       const density = Math.max(0.16, Math.min(0.94,
         0.56 + (noise2(x * 0.30, z * 0.30) * 2 - 1) * 0.32
              + (noise2(x * 0.83 + 20, z * 0.83) * 2 - 1) * 0.15,
@@ -285,9 +355,10 @@ export function createVegetation({ scene, fernGeometry, fernMaterial, atlas, gro
   const rimCount = Math.round(350 * multiplier);
   for (let index = 0; index < rimCount; index++) {
     const angle = random() * Math.PI * 2;
-    const radius = 1.05 + random() * 0.39;
-    const x = Math.cos(angle) * (HATCH_X + 0.18) * radius;
-    const z = Math.sin(angle) * (HATCH_Z + 0.18) * radius;
+    const radius = 0.80 + random() * 0.27;
+    const x = Math.cos(angle) * (hasHatchSurface ? 7.6 : HATCH_X + 0.18) * radius;
+    const z = Math.sin(angle) * (hasHatchSurface ? 8.1 : HATCH_Z + 0.18) * radius + (hasHatchSurface ? 2.6 : 0);
+    if (!plantAllowed(x, z, 0.50)) continue;
     const front = z > 0 && Math.abs(x) < 2.5;
     setPlant(fernMesh, fernIndex++, {
       x, z,
@@ -299,11 +370,12 @@ export function createVegetation({ scene, fernGeometry, fernMaterial, atlas, gro
   const foregroundCount = Math.round(150 * multiplier);
   for (let index = 0; index < foregroundCount; index++) {
     const side = random() > 0.5 ? 1 : -1;
-    const x = side * (2.8 + random() * 2.5);
-    const z = 2.2 + random() * 3.6;
+    const x = side * (3.5 + random() * 3.0);
+    const z = -3.0 + random() * 7.0;
+    if (!plantAllowed(x, z, 0.80)) continue;
     setPlant(fernMesh, fernIndex++, {
       x, z,
-      height: 0.40 + random() * 0.45,
+      height: 0.60 + random() * 0.50,
       width: 0.86 + random() * 0.25,
       color: 0xd1e1b6,
       lean: 0.16,
@@ -318,7 +390,7 @@ export function createVegetation({ scene, fernGeometry, fernMaterial, atlas, gro
       height: frontCenter ? 0.065 + random() * 0.11 : 0.115 + random() ** 1.6 * 0.31,
       width: 0.84 + random() * 0.34,
     });
-  }, { padding: 0.13, centralOpening: true });
+  }, { padding: 0.60, centralOpening: true });
 
   const backCount = fernCount - fernIndex;
   fernIndex += scatter(backCount, [-22, 22, -40, -10], (index, x, z) => {
@@ -334,10 +406,11 @@ export function createVegetation({ scene, fernGeometry, fernMaterial, atlas, gro
   fernMesh.instanceColor.needsUpdate = true;
   counts.ferns = fernIndex;
   counts.fernVertices = fernIndex * vertexCount;
+  attachToSurfaces(fernMesh);
 
-  // Only the green foliage row of Gladeye's atlas is used: no flowers.
+  // Green herbs use row five; stemmed wildflowers use the blossom rows below.
   if (atlas) {
-    const herbSurface = addPlantMotion(new THREE.MeshStandardMaterial({
+    herbSurface = addPlantMotion(new THREE.MeshStandardMaterial({
       map: atlas,
       color: 0xe6edc9,
       alphaTest: 0.42,
@@ -359,11 +432,83 @@ export function createVegetation({ scene, fernGeometry, fernMaterial, atlas, gro
           lean: 0.08,
           color: 0xe7edcf,
         });
-      }, { padding: 0.12, centralOpening: true });
+      }, { padding: 0.38, centralOpening: true });
       herbs.instanceMatrix.needsUpdate = true;
       herbs.instanceColor.needsUpdate = true;
       counts.herbs += herbs.count;
       group.add(herbs);
+      attachToSurfaces(herbs);
+    }
+
+    flowerSurface = addPlantMotion(new THREE.MeshStandardMaterial({
+      map: atlas,
+      color: 0xfff8de,
+      alphaTest: 0.38,
+      side: THREE.DoubleSide,
+      roughness: 0.82,
+      metalness: 0,
+    }), uniforms, { emission: 0.85, breeze: 1.30, diffuseBoost: 1.3, baseEmission: 0.38 });
+    // All selected cells include stems: yellow narcissus and small white daisies,
+    // with restrained pink/purple accents. The 1050 instances follow 60:25:15.
+    const flowerCells = [
+      { row: 0, column: 1, amount: 126 },
+      { row: 3, column: 4, amount: 126 },
+      { row: 3, column: 5, amount: 126 },
+      { row: 3, column: 6, amount: 126 },
+      { row: 3, column: 7, amount: 126 },
+      { row: 2, column: 7, amount: 88 },
+      { row: 4, column: 5, amount: 88 },
+      { row: 4, column: 6, amount: 88 },
+      { row: 0, column: 4, amount: 39 },
+      { row: 0, column: 5, amount: 39 },
+      { row: 1, column: 3, amount: 39 },
+      { row: 1, column: 5, amount: 39 },
+    ];
+    for (const cell of flowerCells) {
+      const flowerClusters = [];
+      const yellowOrWhite = cell.row === 3 || (cell.row === 0 && cell.column === 1)
+        || (cell.row === 2 && cell.column === 7) || cell.row === 4;
+      if (yellowOrWhite) {
+        // Shared clusters make mixed white/yellow blossoms readable along the
+        // stone's side borders without filling the exposed stone clearings.
+        for (const side of [-1, 1]) {
+          for (const z of [-4, -1, 2]) {
+            flowerClusters.push({
+              x: side * 3.5 + (random() - 0.5) * 0.24,
+              z: z + (random() - 0.5) * 0.24,
+              radius: 0.52 + random() * 0.24,
+            });
+          }
+          flowerClusters.push({ x: side * 5, z: -7, radius: 0.66 });
+        }
+      }
+      const randomClusterCount = yellowOrWhite ? 10 : 18;
+      for (let index = 0; index < randomClusterCount; index++) {
+        flowerClusters.push({
+          x: -10.5 + random() * 21,
+          z: -16 + random() * 22,
+          radius: 0.35 + random() * 0.80,
+        });
+      }
+      const flowers = new THREE.InstancedMesh(makeCrossedHerbGeometry(cell.column, cell.row), flowerSurface, cell.amount);
+      flowers.name = `wildflowers-${cell.row}-${cell.column}`;
+      flowers.receiveShadow = true;
+      flowers.frustumCulled = false;
+      flowers.count = scatter(cell.amount, [-11.5, 11.5, -18, 7], (index, x, z) => {
+        const foreground = z > -4.5;
+        setPlant(flowers, index, {
+          x, z,
+          height: (foreground ? 0.26 : 0.24) + random() ** 1.4 * (foreground ? 0.29 : 0.26),
+          width: 0.90 + random() * 0.20,
+          lean: 0.12,
+          color: 0xffffff,
+        });
+      }, { padding: 0.30, clustered: false, flowerClusters });
+      flowers.instanceMatrix.needsUpdate = true;
+      flowers.instanceColor.needsUpdate = true;
+      counts.flowers += flowers.count;
+      group.add(flowers);
+      attachToSurfaces(flowers);
     }
   }
 
@@ -379,17 +524,18 @@ export function createVegetation({ scene, fernGeometry, fernMaterial, atlas, gro
   grass.receiveShadow = true;
   grass.frustumCulled = false;
   grass.count = scatter(6500, [-16, 16, -25, 7.9], (index, x, z) => {
-    const height = 0.065 + random() ** 1.8 * 0.24;
+    const height = 0.12 + random() ** 1.5 * 0.33;
     setPlant(grass, index, {
       x, z, height,
-      width: 1.6 + random() * 1.8,
+      width: 0.90 + random() * 0.80,
       color: random() < 0.20 ? 0xb9c394 : 0xe0e7c4,
     });
-  }, { padding: 0.045 });
+  }, { padding: 0.43 });
   grass.instanceMatrix.needsUpdate = true;
   grass.instanceColor.needsUpdate = true;
   counts.grassClumps = grass.count;
   group.add(grass);
+  attachToSurfaces(grass);
 
   const mossSurface = addPlantMotion(new THREE.MeshStandardMaterial({
     color: 0xf0f2d8,
@@ -397,25 +543,99 @@ export function createVegetation({ scene, fernGeometry, fernMaterial, atlas, gro
     side: THREE.DoubleSide,
     roughness: 0.91,
     metalness: 0,
-  }), uniforms, { emission: 0.60, breeze: 0.48, baseEmission: 0.12 });
-  const moss = new THREE.InstancedMesh(makeMossRosette(), mossSurface, 4500);
-  moss.name = 'broadleaf-moss-carpet';
+  }), uniforms, { emission: 0.60, breeze: 0.48, baseEmission: 0.12, heightRange: 0.68 });
+  const moss = new THREE.InstancedMesh(makeMossRosette(), mossSurface, 3300);
+  moss.name = 'fine-leaf-moss-carpet';
   moss.receiveShadow = true;
   moss.frustumCulled = false;
-  moss.count = scatter(4500, [-10, 10, -12, 7], (index, x, z) => {
-    const height = 0.08 + random() * 0.05;
-    const diameterScale = 0.22 + random() * 0.23;
+  moss.count = scatter(3300, [-10, 10, -12, 7], (index, x, z) => {
+    const height = 0.04 + random() * 0.05;
+    const diameterScale = 0.14 + random() * 0.15;
     setPlant(moss, index, {
       x, z, height,
       width: diameterScale / height,
       lean: 0.035,
       color: random() < 0.24 ? 0xc8df9c : 0xe0edb8,
     });
-  }, { padding: 0.045 });
+  }, { padding: 0.16 });
   moss.instanceMatrix.needsUpdate = true;
   moss.instanceColor.needsUpdate = true;
   counts.mossClumps = moss.count;
   group.add(moss);
+  attachToSurfaces(moss);
+
+  // Samples come from the actual transformed boulder surfaces. Deduplication
+  // spreads the small rooted clusters rather than stacking plants on vertices.
+  const rockCells = new Map();
+  for (const sample of rockSamples) {
+    if (!sample.position || !sample.normal || sample.normal.y <= 0.30 || sample.moss <= 0.45) continue;
+    const position = sample.position;
+    const cell = `${Math.floor(position.x / 0.20)},${Math.floor(position.y / 0.20)},${Math.floor(position.z / 0.20)}`;
+    if (!rockCells.has(cell)) rockCells.set(cell, sample);
+  }
+  const eligibleRocks = [...rockCells.values()];
+  for (let index = eligibleRocks.length - 1; index > 0; index--) {
+    const other = Math.floor(random() * (index + 1));
+    [eligibleRocks[index], eligibleRocks[other]] = [eligibleRocks[other], eligibleRocks[index]];
+  }
+  const rockPlants = eligibleRocks.slice(0, 220);
+  const up = new THREE.Vector3(0, 1, 0);
+  const alignment = new THREE.Quaternion();
+  const yaw = new THREE.Quaternion();
+
+  function placeOnRock(mesh, index, sample, minHeight, maxHeight) {
+    const scale = THREE.MathUtils.clamp(sample.rockScale ?? 1, 0.65, 1.35);
+    const height = (minHeight + random() * (maxHeight - minHeight)) * scale;
+    const normal = sample.normal.clone().normalize();
+    dummy.position.copy(sample.position).addScaledVector(normal, 0.02);
+    alignment.setFromUnitVectors(up, normal);
+    yaw.setFromAxisAngle(up, random() * Math.PI * 2);
+    dummy.quaternion.copy(alignment).multiply(yaw);
+    const width = height * (0.85 + random() * 0.20);
+    dummy.scale.set(width, height, width);
+    dummy.updateMatrix();
+    mesh.setMatrixAt(index, dummy.matrix);
+    tint.set(0xecf2d3).multiplyScalar(0.91 + random() * 0.15);
+    mesh.setColorAt(index, tint);
+  }
+
+  function populateRockBatch(name, geometry, material, samples, minHeight, maxHeight) {
+    if (!samples.length) return null;
+    const mesh = new THREE.InstancedMesh(geometry, material, samples.length);
+    mesh.name = name;
+    mesh.receiveShadow = true;
+    mesh.frustumCulled = false;
+    samples.forEach((sample, index) => placeOnRock(mesh, index, sample, minHeight, maxHeight));
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.instanceColor.needsUpdate = true;
+    group.add(mesh);
+    counts.onRockPlants += samples.length;
+    return mesh;
+  }
+
+  const rockFernSamples = rockPlants.filter((_, index) => !atlas || index % 10 < 5);
+  populateRockBatch('boulder-rooted-ferns', fern, fernSurface, rockFernSamples, 0.075, 0.165);
+  counts.ferns += rockFernSamples.length;
+  counts.fernVertices += rockFernSamples.length * vertexCount;
+  if (atlas && rockPlants.length) {
+    const rockHerbSamples = rockPlants.filter((_, index) => index % 10 >= 5 && index % 10 < 7);
+    for (let column = 0; column < 4; column++) {
+      const samples = rockHerbSamples.filter((_, index) => index % 4 === column);
+      populateRockBatch(`boulder-rooted-herbs-${column}`, makeCrossedHerbGeometry(column + 1), herbSurface, samples, 0.08, 0.20);
+      counts.herbs += samples.length;
+    }
+    const rockFlowerSamples = rockPlants.filter((_, index) => index % 10 >= 7);
+    const cells = [
+      { row: 3, column: 4 }, { row: 3, column: 6 }, { row: 0, column: 1 },
+      { row: 4, column: 5 }, { row: 2, column: 7 }, { row: 1, column: 5 },
+    ];
+    for (let cellIndex = 0; cellIndex < cells.length; cellIndex++) {
+      const samples = rockFlowerSamples.filter((_, index) => index % cells.length === cellIndex);
+      const cell = cells[cellIndex];
+      populateRockBatch(`boulder-rooted-flowers-${cellIndex}`, makeCrossedHerbGeometry(cell.column, cell.row), flowerSurface, samples, 0.10, 0.23);
+      counts.flowers += samples.length;
+    }
+  }
   group.userData.counts = counts;
   return { group, counts };
 }
